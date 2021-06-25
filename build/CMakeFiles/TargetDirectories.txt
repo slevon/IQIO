@@ -1,0 +1,3 @@
+/home/slevon/c/uhd1030/build/CMakeFiles/rebuild_cache.dir
+/home/slevon/c/uhd1030/build/CMakeFiles/edit_cache.dir
+/home/slevon/c/uhd1030/build/CMakeFiles/samplesToFile.dir
