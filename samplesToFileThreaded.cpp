@@ -28,9 +28,79 @@
 
 
 
+//Use multiple Threads, one for consuming, and one for fiel writing
+concurrent_queue<size_t> queue_size;
+concurrent_queue<char*> queue_data;
+
+
 namespace po = boost::program_options;
 
 using namespace std;
+
+void writeToFile(){
+	cout<<"Writing";
+	
+	//////////////////////////
+	//Write To File
+	/////////////////////////
+	size_t size;
+	
+	queue_size.wait_and_pop(size);
+	queue_size.wait_and_pop();
+	out.write(, num_rx_samps * sizeof(samp_type));
+	
+	}
+
+
+template<typename Data>
+class concurrent_queue
+{
+private:
+    std::queue<Data> the_queue;
+    mutable boost::mutex the_mutex;
+    boost::condition_variable the_condition_variable;
+public:
+    void push(Data const& data)
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        the_queue.push(data);
+        lock.unlock();
+        the_condition_variable.notify_one();
+    }
+
+    bool empty() const
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        return the_queue.empty();
+    }
+
+    bool try_pop(Data& popped_value)
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        if(the_queue.empty())
+        {
+            return false;
+        }
+        
+        popped_value=the_queue.front();
+        the_queue.pop();
+        return true;
+    }
+
+    void wait_and_pop(Data& popped_value)
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        while(the_queue.empty())
+        {
+            the_condition_variable.wait(lock);
+        }
+        
+        popped_value=the_queue.front();
+        the_queue.pop();
+    }
+
+};
+
 
 
 static bool stop_signal_called = false;
@@ -126,7 +196,6 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
             break;
         }
         if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW) {
-			std::cerr<<"O";
             if (overflow_message) {
                 overflow_message = false;
                 std::cerr
@@ -159,7 +228,14 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
         num_total_samps += num_rx_samps;
 
         if (outfile.is_open()) {
-			outfile.write((const char*)&buff.front(), num_rx_samps * sizeof(samp_type));
+				std::vector<samp_type> buffQ (samps_per_buff);
+				buffQ=buff;
+				
+				queue_size.push(num_rx_samps * sizeof(samp_type));
+				queue_data.push(buffQ);
+				
+
+            //OLD: outfile.write((const char*)&buff.front(), num_rx_samps * sizeof(samp_type));
         }
 
         if (bw_summary) {
