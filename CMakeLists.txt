@@ -4,6 +4,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
+###########################################
+#Version 29.06.2021
+# -Added sampelesToFileThreaded and other templates
 
 cmake_minimum_required(VERSION 3.5.1)
 project(INIT_USRP CXX)
