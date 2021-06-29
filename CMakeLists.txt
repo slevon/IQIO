@@ -53,7 +53,7 @@ link_directories(${Boost_LIBRARY_DIRS})
 add_executable(samplesToFile samplesToFile.cpp)
 #add_executable(samplesFromFile samplesFromFile.cpp)
 add_executable(samplesToFileThreaded samplesToFileThreaded.cpp)
-add_executable(dumper dumper.cpp)
+#add_executable(dumper dumper.cpp)
 
 set(CMAKE_BUILD_TYPE "Release")
 message(STATUS "******************************************************************************")
@@ -73,7 +73,7 @@ if(NOT UHD_USE_STATIC_LIBS)
     target_link_libraries(samplesToFile ${UHD_LIBRARIES} ${Boost_LIBRARIES})
     #target_link_libraries(samplesFromFile ${UHD_LIBRARIES} ${Boost_LIBRARIES})
     target_link_libraries(samplesToFileThreaded ${UHD_LIBRARIES} ${Boost_LIBRARIES})
-    target_link_libraries(dumper ${UHD_LIBRARIES} ${Boost_LIBRARIES})
+    #target_link_libraries(dumper ${UHD_LIBRARIES} ${Boost_LIBRARIES})
 # Shared library case: All we need to do is link against the library, and
 # anything else we need (in this case, some Boost libraries):
 else(NOT UHD_USE_STATIC_LIBS)
