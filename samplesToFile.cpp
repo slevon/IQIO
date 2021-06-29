@@ -19,19 +19,8 @@
 #include <fstream>
 #include <iostream>
 #include <thread>
-///////////////////////////////////////////////////////
-//RA new for Compression
-#include <boost/iostreams/filtering_streambuf.hpp>
-#include <boost/iostreams/copy.hpp>
-#include <boost/iostreams/filter/gzip.hpp>
-
-
-
 
 namespace po = boost::program_options;
-
-using namespace std;
-
 
 static bool stop_signal_called = false;
 void sig_int_handler(int)
@@ -44,7 +33,7 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     const std::string& cpu_format,
     const std::string& wire_format,
     const size_t& channel,
-    std::string& file,  //RA Const removed
+    const std::string& file,
     size_t samps_per_buff,
     unsigned long long num_requested_samples,
     double time_requested       = 0.0,
@@ -53,9 +42,8 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     bool null                   = false,
     bool enable_size_map        = false,
     bool continue_on_bad_packet = false,
-    bool compress_file			= false)//RA
+    int rotate_time       = 0)
 {
-	std::string ext =".gz";//RA
     unsigned long long num_total_samps = 0;
     // create a receive streamer
     uhd::stream_args_t stream_args(cpu_format, wire_format);
@@ -66,30 +54,10 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
 
     uhd::rx_metadata_t md;
     std::vector<samp_type> buff(samps_per_buff);
-    //////
-    //File
-    if(compress_file){
-	 file +=ext;
-	}
     std::ofstream outfile;
-    if (not null){
+    if (not null)
         outfile.open(file.c_str(), std::ofstream::binary);
-	}
     bool overflow_message = true;
-    //////
-    //RA Adding Compression
-    ///////
-    boost::iostreams::filtering_streambuf<boost::iostreams::output> outbuf;
-    if(compress_file){
-		outbuf.push(boost::iostreams::gzip_compressor());
-	}
-    outbuf.push(outfile);
-    //Convert streambuf to ostream
-    std::ostream out(&outbuf);
-
-	/////////
-	/////////
-	/////////
 
     // setup streaming
     uhd::stream_cmd_t stream_cmd((num_requested_samples == 0)
@@ -108,8 +76,8 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     // Track time and samps between updating the BW summary
     auto last_update                     = start_time;
     unsigned long long last_update_samps = 0;
-
-
+    auto last_update_file				= start_time;
+	unsigned long long logrotate_cnt = 0;
     // Run this loop until either time expired (if a duration was given), until
     // the requested number of samples were collected (if such a number was
     // given), or until Ctrl-C was pressed.
@@ -120,22 +88,33 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
 
         size_t num_rx_samps =
             rx_stream->recv(&buff.front(), buff.size(), md, 3.0, enable_size_map);
+            
+        num_total_samps += num_rx_samps;
+        /////////
+		//file rotation
+        const auto time_since_last_update = now - last_update_file;
+		if (time_since_last_update > std::chrono::seconds(rotate_time)) {
+			std::string offset=file+std::to_string(logrotate_cnt++);
+			std::cout<<"File-rotate"<<offset<<std::endl;
+			if (outfile.is_open()) {
+				outfile.close();
+			}
+			outfile.open(offset.c_str(), std::ofstream::binary);
+			last_update_file = now;
+		}
 
         if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
             std::cout << boost::format("Timeout while streaming") << std::endl;
             break;
         }
         if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW) {
-			std::cerr<<"O";
+			std::cerr<<"#";
             if (overflow_message) {
                 overflow_message = false;
                 std::cerr
                     << boost::format(
                            "Got an overflow indication. Please consider the following:\n"
-                           "  Your write medium must sustain a rate of %fMB/s.\n"
-                           "  Dropped samples will not be written to the file.\n"
-                           "  Please modify this example for your purposes.\n"
-                           "  This message will not appear again.\n")
+                           "  Your write medium must sustain a rate of %fMB/s.\n")
                            % (usrp->get_rx_rate(channel) * sizeof(samp_type) / 1e6);
             }
             continue;
@@ -156,11 +135,12 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
             mapSizes[num_rx_samps] += 1;
         }
 
-        num_total_samps += num_rx_samps;
 
         if (outfile.is_open()) {
-			outfile.write((const char*)&buff.front(), num_rx_samps * sizeof(samp_type));
+            outfile.write((const char*)&buff.front(), num_rx_samps * sizeof(samp_type));
         }
+		
+        			
 
         if (bw_summary) {
             last_update_samps += num_rx_samps;
@@ -181,10 +161,7 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     rx_stream->issue_stream_cmd(stream_cmd);
 
     if (outfile.is_open()) {
-        ////New RA
-         //Cleanup
-		boost::iostreams::close(outbuf); // Don't forget this!
-		outfile.close();
+        outfile.close();
     }
 
     if (stats) {
@@ -248,12 +225,6 @@ bool check_locked_sensor(std::vector<std::string> sensor_names,
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     std::cout << std::endl;
-    
-    
-    ////////////
-    ////
-    
-    
     return true;
 }
 
@@ -263,6 +234,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     std::string args, file, type, ant, subdev, ref, wirefmt;
     size_t channel, total_num_samps, spb;
     double rate, freq, gain, bw, total_time, setup_time, lo_offset;
+    int rotate;
 
     // setup the program options
     po::options_description desc("Allowed options");
@@ -294,7 +266,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         ("continue", "don't abort on a bad packet")
         ("skip-lo", "skip checking LO lock status")
         ("int-n", "tune USRP with integer-N tuning")
-        ("compress", "Use Deflate to create compressed file") //RA
+        ("rotate", po::value<int>(&rotate)->default_value(10), "number of seconds between file rotate default:10")
     ;
     // clang-format on
     po::variables_map vm;
@@ -316,13 +288,6 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     bool null                   = vm.count("null") > 0;
     bool enable_size_map        = vm.count("sizemap") > 0;
     bool continue_on_bad_packet = vm.count("continue") > 0;
-    bool compress_file			= vm.count("compress") > 0; //RA
-	
-	if (compress_file){
-		std::cout<<"File compression active"<<endl;
-	}else{
-		std::cout<<"File compression NOT active"<<endl;
-	}
 
     if (enable_size_map)
         std::cout << "Packet size tracking enabled - will only recv one packet at a time!"
@@ -444,8 +409,8 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         stats,                    \
         null,                     \
         enable_size_map,          \
-        continue_on_bad_packet,	  \
-        compress_file)
+        continue_on_bad_packet,    \
+        rotate)
     // recv to file
     if (wirefmt == "s16") {
         if (type == "double")

@@ -111,6 +111,32 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+# Target rules for targets named dumper
+
+# Build rule for target.
+dumper: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 dumper
+.PHONY : dumper
+
+# fast build rule for target.
+dumper/fast:
+	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/build
+.PHONY : dumper/fast
+
+#=============================================================================
+# Target rules for targets named samplesToFileThreaded
+
+# Build rule for target.
+samplesToFileThreaded: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 samplesToFileThreaded
+.PHONY : samplesToFileThreaded
+
+# fast build rule for target.
+samplesToFileThreaded/fast:
+	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/build
+.PHONY : samplesToFileThreaded/fast
+
+#=============================================================================
 # Target rules for targets named samplesToFile
 
 # Build rule for target.
@@ -122,6 +148,33 @@ samplesToFile: cmake_check_build_system
 samplesToFile/fast:
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/build
 .PHONY : samplesToFile/fast
+
+dumper.o: dumper.cpp.o
+
+.PHONY : dumper.o
+
+# target to build an object file
+dumper.cpp.o:
+	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/dumper.cpp.o
+.PHONY : dumper.cpp.o
+
+dumper.i: dumper.cpp.i
+
+.PHONY : dumper.i
+
+# target to preprocess a source file
+dumper.cpp.i:
+	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/dumper.cpp.i
+.PHONY : dumper.cpp.i
+
+dumper.s: dumper.cpp.s
+
+.PHONY : dumper.s
+
+# target to generate assembly for a file
+dumper.cpp.s:
+	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/dumper.cpp.s
+.PHONY : dumper.cpp.s
 
 samplesToFile.o: samplesToFile.cpp.o
 
@@ -150,6 +203,33 @@ samplesToFile.cpp.s:
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/samplesToFile.cpp.s
 .PHONY : samplesToFile.cpp.s
 
+samplesToFileThreaded.o: samplesToFileThreaded.cpp.o
+
+.PHONY : samplesToFileThreaded.o
+
+# target to build an object file
+samplesToFileThreaded.cpp.o:
+	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/samplesToFileThreaded.cpp.o
+.PHONY : samplesToFileThreaded.cpp.o
+
+samplesToFileThreaded.i: samplesToFileThreaded.cpp.i
+
+.PHONY : samplesToFileThreaded.i
+
+# target to preprocess a source file
+samplesToFileThreaded.cpp.i:
+	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/samplesToFileThreaded.cpp.i
+.PHONY : samplesToFileThreaded.cpp.i
+
+samplesToFileThreaded.s: samplesToFileThreaded.cpp.s
+
+.PHONY : samplesToFileThreaded.s
+
+# target to generate assembly for a file
+samplesToFileThreaded.cpp.s:
+	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/samplesToFileThreaded.cpp.s
+.PHONY : samplesToFileThreaded.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -157,11 +237,19 @@ help:
 	@echo "... clean"
 	@echo "... depend"
 	@echo "... rebuild_cache"
+	@echo "... dumper"
 	@echo "... edit_cache"
+	@echo "... samplesToFileThreaded"
 	@echo "... samplesToFile"
+	@echo "... dumper.o"
+	@echo "... dumper.i"
+	@echo "... dumper.s"
 	@echo "... samplesToFile.o"
 	@echo "... samplesToFile.i"
 	@echo "... samplesToFile.s"
+	@echo "... samplesToFileThreaded.o"
+	@echo "... samplesToFileThreaded.i"
+	@echo "... samplesToFileThreaded.s"
 .PHONY : help
 
 

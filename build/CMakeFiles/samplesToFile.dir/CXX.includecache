@@ -35,10 +35,4 @@ iostream
 -
 thread
 -
-boost/iostreams/filtering_streambuf.hpp
--
-boost/iostreams/copy.hpp
--
-boost/iostreams/filter/gzip.hpp
--
 
