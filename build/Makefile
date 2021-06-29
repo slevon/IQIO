@@ -48,10 +48,10 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/slevon/c/uhd1030
+CMAKE_SOURCE_DIR = /home/pi/uhd1030
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/slevon/c/uhd1030/build
+CMAKE_BINARY_DIR = /home/pi/uhd1030/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -80,9 +80,9 @@ edit_cache/fast: edit_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles /home/slevon/c/uhd1030/build/CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/pi/uhd1030/build/CMakeFiles /home/pi/uhd1030/build/CMakeFiles/progress.marks
 	$(MAKE) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/pi/uhd1030/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -111,17 +111,17 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named dumper
+# Target rules for targets named samplesToFile
 
 # Build rule for target.
-dumper: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 dumper
-.PHONY : dumper
+samplesToFile: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 samplesToFile
+.PHONY : samplesToFile
 
 # fast build rule for target.
-dumper/fast:
-	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/build
-.PHONY : dumper/fast
+samplesToFile/fast:
+	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/build
+.PHONY : samplesToFile/fast
 
 #=============================================================================
 # Target rules for targets named samplesToFileThreaded
@@ -135,46 +135,6 @@ samplesToFileThreaded: cmake_check_build_system
 samplesToFileThreaded/fast:
 	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/build
 .PHONY : samplesToFileThreaded/fast
-
-#=============================================================================
-# Target rules for targets named samplesToFile
-
-# Build rule for target.
-samplesToFile: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 samplesToFile
-.PHONY : samplesToFile
-
-# fast build rule for target.
-samplesToFile/fast:
-	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/build
-.PHONY : samplesToFile/fast
-
-dumper.o: dumper.cpp.o
-
-.PHONY : dumper.o
-
-# target to build an object file
-dumper.cpp.o:
-	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/dumper.cpp.o
-.PHONY : dumper.cpp.o
-
-dumper.i: dumper.cpp.i
-
-.PHONY : dumper.i
-
-# target to preprocess a source file
-dumper.cpp.i:
-	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/dumper.cpp.i
-.PHONY : dumper.cpp.i
-
-dumper.s: dumper.cpp.s
-
-.PHONY : dumper.s
-
-# target to generate assembly for a file
-dumper.cpp.s:
-	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/dumper.cpp.s
-.PHONY : dumper.cpp.s
 
 samplesToFile.o: samplesToFile.cpp.o
 
@@ -237,13 +197,9 @@ help:
 	@echo "... clean"
 	@echo "... depend"
 	@echo "... rebuild_cache"
-	@echo "... dumper"
 	@echo "... edit_cache"
-	@echo "... samplesToFileThreaded"
 	@echo "... samplesToFile"
-	@echo "... dumper.o"
-	@echo "... dumper.i"
-	@echo "... dumper.s"
+	@echo "... samplesToFileThreaded"
 	@echo "... samplesToFile.o"
 	@echo "... samplesToFile.i"
 	@echo "... samplesToFile.s"

@@ -104,13 +104,13 @@ void writeToFile(std::ostream &out,
   	/////////////////////////
   	long size;
   	std::vector<samp_type> data;
-    sleep(1);
   	while (!stop_signal_called || !queue_data.empty() ){
   		if(!queue_size.try_pop(size)
         || !queue_data.try_pop(data)){
-          sleep(0.05);
+          sleep(0.5);
+        }else{
+            out.write((const char*)&data.front(), size);
         }
-  		out.write((const char*)&data.front(), size);
   	}
     std::cout<<"Finishing Thread"<<std::endl;
 	}

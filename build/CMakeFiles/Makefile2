@@ -44,18 +44,17 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/slevon/c/uhd1030
+CMAKE_SOURCE_DIR = /home/pi/uhd1030
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/slevon/c/uhd1030/build
+CMAKE_BINARY_DIR = /home/pi/uhd1030/build
 
 #=============================================================================
 # Directory level rules for the build root directory
 
 # The main recursive "all" target.
-all: CMakeFiles/dumper.dir/all
-all: CMakeFiles/samplesToFileThreaded.dir/all
 all: CMakeFiles/samplesToFile.dir/all
+all: CMakeFiles/samplesToFileThreaded.dir/all
 
 .PHONY : all
 
@@ -65,65 +64,10 @@ preinstall:
 .PHONY : preinstall
 
 # The main recursive "clean" target.
-clean: CMakeFiles/dumper.dir/clean
-clean: CMakeFiles/samplesToFileThreaded.dir/clean
 clean: CMakeFiles/samplesToFile.dir/clean
+clean: CMakeFiles/samplesToFileThreaded.dir/clean
 
 .PHONY : clean
-
-#=============================================================================
-# Target rules for target CMakeFiles/dumper.dir
-
-# All Build rule for target.
-CMakeFiles/dumper.dir/all:
-	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/depend
-	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/slevon/c/uhd1030/build/CMakeFiles --progress-num=1,2 "Built target dumper"
-.PHONY : CMakeFiles/dumper.dir/all
-
-# Build rule for subdir invocation for target.
-CMakeFiles/dumper.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 2
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/dumper.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 0
-.PHONY : CMakeFiles/dumper.dir/rule
-
-# Convenience name for target.
-dumper: CMakeFiles/dumper.dir/rule
-
-.PHONY : dumper
-
-# clean rule for target.
-CMakeFiles/dumper.dir/clean:
-	$(MAKE) -f CMakeFiles/dumper.dir/build.make CMakeFiles/dumper.dir/clean
-.PHONY : CMakeFiles/dumper.dir/clean
-
-#=============================================================================
-# Target rules for target CMakeFiles/samplesToFileThreaded.dir
-
-# All Build rule for target.
-CMakeFiles/samplesToFileThreaded.dir/all:
-	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/depend
-	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/slevon/c/uhd1030/build/CMakeFiles --progress-num=5,6 "Built target samplesToFileThreaded"
-.PHONY : CMakeFiles/samplesToFileThreaded.dir/all
-
-# Build rule for subdir invocation for target.
-CMakeFiles/samplesToFileThreaded.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 2
-	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/samplesToFileThreaded.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 0
-.PHONY : CMakeFiles/samplesToFileThreaded.dir/rule
-
-# Convenience name for target.
-samplesToFileThreaded: CMakeFiles/samplesToFileThreaded.dir/rule
-
-.PHONY : samplesToFileThreaded
-
-# clean rule for target.
-CMakeFiles/samplesToFileThreaded.dir/clean:
-	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/clean
-.PHONY : CMakeFiles/samplesToFileThreaded.dir/clean
 
 #=============================================================================
 # Target rules for target CMakeFiles/samplesToFile.dir
@@ -132,14 +76,14 @@ CMakeFiles/samplesToFileThreaded.dir/clean:
 CMakeFiles/samplesToFile.dir/all:
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/depend
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/slevon/c/uhd1030/build/CMakeFiles --progress-num=3,4 "Built target samplesToFile"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/pi/uhd1030/build/CMakeFiles --progress-num=1,2 "Built target samplesToFile"
 .PHONY : CMakeFiles/samplesToFile.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/samplesToFile.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/pi/uhd1030/build/CMakeFiles 2
 	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/samplesToFile.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/pi/uhd1030/build/CMakeFiles 0
 .PHONY : CMakeFiles/samplesToFile.dir/rule
 
 # Convenience name for target.
@@ -151,6 +95,33 @@ samplesToFile: CMakeFiles/samplesToFile.dir/rule
 CMakeFiles/samplesToFile.dir/clean:
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/clean
 .PHONY : CMakeFiles/samplesToFile.dir/clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/samplesToFileThreaded.dir
+
+# All Build rule for target.
+CMakeFiles/samplesToFileThreaded.dir/all:
+	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/depend
+	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/pi/uhd1030/build/CMakeFiles --progress-num=3,4 "Built target samplesToFileThreaded"
+.PHONY : CMakeFiles/samplesToFileThreaded.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/samplesToFileThreaded.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/pi/uhd1030/build/CMakeFiles 2
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/samplesToFileThreaded.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/pi/uhd1030/build/CMakeFiles 0
+.PHONY : CMakeFiles/samplesToFileThreaded.dir/rule
+
+# Convenience name for target.
+samplesToFileThreaded: CMakeFiles/samplesToFileThreaded.dir/rule
+
+.PHONY : samplesToFileThreaded
+
+# clean rule for target.
+CMakeFiles/samplesToFileThreaded.dir/clean:
+	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/clean
+.PHONY : CMakeFiles/samplesToFileThreaded.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.
