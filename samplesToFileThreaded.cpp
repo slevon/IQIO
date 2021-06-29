@@ -141,7 +141,6 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
 
     uhd::rx_metadata_t md;
     std::vector<samp_type > buff(samps_per_buff);
-    bool overflow_message = true;
 
     //////
     //File
@@ -211,17 +210,7 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
             break;
         }
         if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW) {
-            if (overflow_message) {
-                overflow_message = false;
-                std::cerr
-                    << boost::format(
-                           "Got an overflow indication. Please consider the following:\n"
-                           "  Your write medium must sustain a rate of %fMB/s.\n"
-                           "  Dropped samples will not be written to the file.\n"
-                           "  Please modify this example for your purposes.\n"
-                           "  This message will not appear again.\n")
-                           % (usrp->get_rx_rate(channel) * sizeof(samp_type) / 1e6);
-            }
+                std::cerr<<"0";
             continue;
         }
         if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
@@ -244,9 +233,10 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
         ////////////
         //Hand over to Thread
         ////////////
-	      queue_size.push(num_rx_samps * sizeof(samp_type));
-	      queue_data.push(buff);
-
+        if (not null){
+	         queue_size.push(num_rx_samps * sizeof(samp_type));
+	          queue_data.push(buff);
+        }
         //Echo summary
         if (bw_summary) {
             last_update_samps += num_rx_samps;
