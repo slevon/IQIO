@@ -107,25 +107,27 @@ class GUI:
 
         self.checks = []
         #self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
-        self.checks.append({"type":"label","name": "media", "function": self.check_df})
         self.checks.append({"type":"label","name": "internet", "function": self.check_internet})
         self.checks.append({"type":"label","name": "check_dump1090", "function": self.check_processrunning, "parameter": ["dump1090"]})
         self.checks.append({"type":"label","name": "check_sim", "function": self.check_processrunning, "parameter": ["sim.py"]})
+        self.checks.append({"type":"label","name": "media", "function": self.check_df,"parameter": ["media","label"]})
+        self.checks.append({"type":"plot","name": "media_plot", "size":30, "function": self.check_df,"parameter": ["media","plot"]})
         self.checks.append({"type":"label","name": "check_reader", "function": self.check_processrunning, "parameter": ["beast_reader.py"]})
         self.checks.append({"type":"label","name": "file_written", "function": self.check_file_write, })
         self.checks.append({"type":"label","name": "check_messages", "function": self.check_received_messages})
-        self.checks.append({"type":"plot","name": "check_p_df", "size":30, "function": self.check_p_df})
 
         self.labels = []  # creates an empty list for your labels
+        self.plots = []
         for i,itm in enumerate(self.checks):  # iterates over your nums
             if itm["type"] == "label":
                 label = Label(self.mainFrame, text=itm['name'],anchor="center")  # set your text
-                itm['label'] = label
+                itm['widget'] = label
                 label.grid(row=i+1,column=0, sticky='nswe', padx=5, pady=1)
                 self.labels.append(label)  # appends the label to the list for further use
             elif itm["type"] == "plot":
-                plot=Plotwindow(self.mainFrame, itm.get('size',10), (3, 3))
-                plot.widget.grid(row=i+1, column=0, sticky='nswe', padx=1, pady=1)
+                plot=Plotwindow(self.mainFrame, itm.get('size',10), (10, 10))
+                itm['widget'] = plot
+                plot.widget.grid(row=i+1, column=0, sticky='nswe', padx=5, pady=1)
                 self.plots.append(plot)
             else:
                 print("Error, unkown check type")
@@ -193,19 +195,42 @@ class GUI:
         self.window.attributes("-fullscreen", self.fullScreenState)
         self.logger.debug("Fullscreen quit")
 
-    def set_label_state(self,label, state, message):
-        result=False
-        color = ('green3' if state else 'orange red')
-        if str(label.cget('background')) != color:
-            if state:
-                self.logger.info("{}".format(message))
-                result=True
+    def sys_check(self):
+        for itm in self.checks:
+            state, result = itm['function'](*itm.get('parameter', []))
+            self.update_widget_state(itm['widget'],itm['type'], state, result)
+            if state == False:
+                self.bad += 1
             else:
-                self.logger.error("{}".format(message))
-                result=False
-        label['background'] = color
-        label['text'] = message
-        return result
+                self.bad = 0
+
+        if self.bad > 10:
+            img=self.take_screenshot()
+            with open('piMon.log','r') as f:
+                output = f.read()
+
+        self.window.after(10000, self.sys_check)
+
+
+    def update_widget_state(self,widget,type, state, result_value):
+        result = False
+
+        if type == "label":
+            color = ('green3' if state else 'orange red')
+            if str(widget.cget('background')) != color:
+                if state:
+                    self.logger.info("{}".format(result_value))
+                    result=True
+                else:
+                    self.logger.error("{}".format(result_value))
+                    result=False
+            widget['background'] = color
+            widget['text'] = result_value
+        elif type == "plot":
+            widget.append(result_value)
+        else:
+            self.logger.error("Unknown widget type could not be updated")
+        return result_value
 
     def set_wifi(self):
         #todo:https://raspberrypi.stackexchange.com/questions/104887/information-about-network-gui-in-raspbian
@@ -262,18 +287,31 @@ class GUI:
         # print(result)
         return True, "Port check Todo"
 
-    def check_df(self,grep_filter="media"):
+    def check_df(self,grep_filter="media",return_type="label"):
         #result=subprocess.check_output(['df', '-h','|','grep',grep_filter])
-        cmd="df -h | grep {}".format(grep_filter)
+        cmd="df -BG | grep {}".format(grep_filter)
         ps = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         output = ps.communicate()[0]
         #Parse:
         elements=output.split()
         if len(elements) != 6:
-            print("Error DF!")
+            print("Error DF!",len(elements),return_type)
+            print(elements)
             return False, "DF Check failed!"
-        #print(elements)
-        return True, "{} {}:\n  use: {} {},".format(elements[0].decode(),elements[1].decode(),elements[2].decode(),elements[4].decode())
+
+        #If less than 10GB left, turn into red...
+        freeGb=int(elements[3].decode()[:-1])
+        if freeGb < 10:
+            result=False
+        else:
+            result=True
+
+        if return_type == "label":
+            return result, "{} {}:\n  use: {} {},".format(elements[0].decode(),elements[1].decode(),elements[2].decode(),elements[4].decode())
+        elif return_type == "plot":
+            #return True,  #free GB
+            return True, int(random.randint(0,22)) #free GB
+        return False, "Error"
 
     def check_received_messages(self):
         path_s = self.path + 'log*.csv'
@@ -309,31 +347,7 @@ class GUI:
                 pass
         return False, f"{processName} not running"
 
-    def sys_check(self):
-        for itm in self.checks:
 
-            IFG hier weiter mit if itetm == LAbel oder Plot
-            state, message = itm['function'](*itm.get('parameter', []))
-            self.set_label_state(itm['label'], state, message)
-            if state == False:
-                self.bad += 1
-            else:
-                self.bad =0
-
-        if self.bad > 10:
-            img=self.take_screenshot()
-            with open('piMon.log','r') as f:
-                output = f.read()
-
-        y = []
-        x=[]
-        for i in range(0, 30):
-            n = random.randint(1, 30)
-            y.append(n)
-            x.append(i)
-        self.plot.clearplot()
-        self.plot.plotxy(x,y)
-        self.window.after(10000, self.sys_check)
 
     def take_screenshot(self):
         path="/run/shm/scrot2.png"
