@@ -4,7 +4,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-
+#include <stdlib.h>
+#include <limits>
 #include <uhd/exception.hpp>
 #include <uhd/types/tune_request.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
@@ -29,6 +30,8 @@
 #include <boost/iostreams/filter/gzip.hpp>
 ///////////////////////////////////////////////////////
 //Use multiple Threads, one for consuming, and one for fiel writing
+
+unsigned int  clipping_occured =0;
 template<typename Data>
 class concurrent_queue
 {
@@ -93,22 +96,31 @@ void sig_int_handler(int)
 {
     stop_signal_called = true;
 }
-
+///////////////////////////////////////////////////////////////////////////
 template <typename samp_type>
 void writeToFile(std::ostream &out,
 	concurrent_queue<long>& queue_size,
-	concurrent_queue<std::vector<samp_type> >& queue_data
-	){
+	concurrent_queue<std::vector<samp_type> >& queue_data){
   	//////////////////////////
   	//Write To File
   	/////////////////////////
   	long size;
   	std::vector<samp_type> data;
-  	while (!stop_signal_called || !queue_data.empty() ){
+  	while (!(stop_signal_called) ){
   		if(!queue_size.try_pop(size)
         || !queue_data.try_pop(data)){
           sleep(0.5);
         }else{
+            //check for clipping:
+            // C++14
+            auto maxelem = max_element(data.begin(), data.end(),
+                                       [](auto a, auto b) { return abs(a) < abs(b); });
+            double nabs=abs(*maxelem);
+            if(nabs > 0.95 and nabs < 1){ //the float case
+                clipping_occured++;
+            }else if(nabs > 32767 * 0.95 ){ //the "short case"
+                clipping_occured++;
+            }
             out.write((const char*)&data.front(), size);
         }
   	}
@@ -167,10 +179,10 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     ////////////////////////////////////////////
   	concurrent_queue<std::vector<samp_type> > queue_data;
   	concurrent_queue<long> queue_size;
-
   	std::cout<<"Starting write thread"<<endl;
   	std::thread writeThread(writeToFile<samp_type>,
-  				std::ref(out),std::ref(queue_size),std::ref(queue_data));
+  				std::ref(out),std::ref(queue_size),
+          std::ref(queue_data));
   	/////////
   	/////////
   	/////////
@@ -234,20 +246,23 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
         //Hand over to Thread
         ////////////
         if (not null){
-	         queue_size.push(num_rx_samps * sizeof(samp_type));
+	          queue_size.push(num_rx_samps * sizeof(samp_type));
 	          queue_data.push(buff);
         }
         //Echo summary
         if (bw_summary) {
             last_update_samps += num_rx_samps;
             const auto time_since_last_update = now - last_update;
-            if (time_since_last_update > std::chrono::seconds(10)) {
+            if (time_since_last_update > std::chrono::seconds(1)) {
                 const double time_since_last_update_s =
                     std::chrono::duration<double>(time_since_last_update).count();
                 const double rate = double(last_update_samps) / time_since_last_update_s;
-                std::cout << "rate:" << (rate / 1e6) << ",unit:\"Msps\",\tqueue:"<<queue_data.size()<< std::endl;
+                std::cout << "rate:" << (rate / 1e6)
+                          << ",unit:\"Msps\",\tqueue:"<<queue_data.size()
+                          <<",clipping:"<<clipping_occured<<std::endl;
                 last_update_samps = 0;
                 last_update       = now;
+                clipping_occured = 0;
             }
         }
     }
@@ -258,6 +273,7 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
 
     //////////
     //Stop the thread:
+    stop_signal_called = true;
     writeThread.join();
     std::cout<<"Thread endend"<<endl;
 
@@ -393,7 +409,8 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     bool compress_file			    = vm.count("compress") > 0; //RA
 
     if (compress_file){
-    	std::cout<<"File compression active"<<endl;
+
+    	std::cout<<"File compression active" << endl;
     }else{
     	std::cout<<"File compression NOT active"<<endl;
     }

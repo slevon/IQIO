@@ -1,8 +1,20 @@
-2021-06-26 00:15:48 INFO   Application: startup
-2021-06-26 00:15:48 INFO   Internet available
-2021-06-26 00:15:48 ERROR  dump1090 not running
-2021-06-26 00:15:48 ERROR  sim.py not running
-2021-06-26 00:15:48 ERROR  beast_reader.py not running
-2021-06-26 00:15:48 ERROR  No Files found
-2021-06-26 00:15:48 ERROR  No message files found
-2021-06-26 00:15:50 DEBUG  Fullscreen quit
+2021-06-30 07:59:58 INFO   Application: startup
+2021-06-30 07:59:58 INFO   media 120G:
+  use: 2,1G(2%),
+2021-06-30 07:59:58 INFO   Internet available
+2021-06-30 07:59:58 ERROR  dump1090 not running
+2021-06-30 07:59:59 ERROR  sim.py not running
+2021-06-30 07:59:59 ERROR  beast_reader.py not running
+2021-06-30 07:59:59 ERROR  No Files found
+2021-06-30 07:59:59 ERROR  No message files found
+2021-06-30 08:00:24 INFO   Application: startup
+2021-06-30 08:00:25 INFO   /dev/sda1 120G:
+  use: 2,1G 2%,
+2021-06-30 08:00:25 INFO   Internet available
+2021-06-30 08:00:25 ERROR  dump1090 not running
+2021-06-30 08:00:25 ERROR  sim.py not running
+2021-06-30 08:00:25 ERROR  beast_reader.py not running
+2021-06-30 08:00:25 ERROR  No Files found
+2021-06-30 08:00:25 ERROR  No message files found
+2021-06-30 11:01:45 ERROR  Internet not available
+2021-06-30 11:01:55 INFO   Internet available

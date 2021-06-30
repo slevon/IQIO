@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/pi/uhd1030/samplesToFile.cpp
+/home/slevon/c/uhd1030/samplesToFile.cpp
 uhd/exception.hpp
 -
 uhd/types/tune_request.hpp
