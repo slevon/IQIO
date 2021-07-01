@@ -1,6 +1,9 @@
 ############
 #Set working dir
+import json
 import os
+from socket import timeout
+from time import sleep
 
 from ground.plotWidget import Plotwindow
 
@@ -26,6 +29,11 @@ import psutil
 
 import logging
 from logging.handlers import RotatingFileHandler
+
+##########
+##Serial
+import serial
+
 
 try:
     import httplib
@@ -59,13 +67,48 @@ class TextHandler(logging.Handler):
         self.text.after(0, append)
 
 
-
-class GUI:
+class StatIo:
     def __init__(self):
+        self.ser = serial.Serial('/dev/ttyUSB0',timeout=0.5)  # open serial port NON-Blocking read
+        print(self.ser.name)  # check which port was really used
+        self.ser.write(b'1030 Startup')  # write a string
+
+    def __del__(self):
+        self.ser.close()  # close port
+    def send(self,data):
+        self.ser.write(bytearray((data+"\n").encode()))
+    def receive_pending(self):
+        data=self.ser.readline()
+        return data
+    def receive_blocking(self):
+        to = self.ser.timeout
+        self.ser.timeout = 20
+        data=self.ser.readline()
+        self.ser.timeout = to
+        return data
+
+class GUI():
+    def __init__(self,is_master=True):
         ###############
         #Variables
         ###############
         self.bad = 0 #mon has a bad state if >0 (number of checks*bad states)
+        self.row_count = 8 #widgets rows
+        '''
+        We have two options here:
+            - Master:   - Creates a set of widgets from the constuctor
+                        - Runs on the node that is doing the work
+                        - Creates a josn opject, that is send using the StatIo Class
+            - No Master:- Creates a set of Widgets by requeisting them from the master:
+                        - Runs on any Other Machine
+                        - retrieves the States to update from the StatIo Class, does not Perform any Checks
+                        
+        '''
+        self.is_master =is_master
+        self.io = StatIo()
+        self.s_last_results={}
+        self.check_names=[]
+        self.elements = []
 
         #######################
         #Logger:
@@ -91,57 +134,63 @@ class GUI:
 
         self.mainFrame.grid(row=0, column=0, sticky=N+S+E+W)
 
-        ###########
-        # Show Plot:
-        ##########
-        #self.panel = Label(self.window)
-        #self.panel.place(x=0, y=0, relwidth=1, relheight=1)
-
-
         #############
-        #Settings:
+        # Settings:
         ############
-        self.path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'../reader/beastReader/')
+        self.path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../reader/beastReader/')
         ##############
         #Checks
-
-        self.checks = []
-        #self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
-        self.checks.append({"type":"label","name": "internet", "function": self.check_internet})
-        self.checks.append({"type":"label","name": "check_dump1090", "function": self.check_processrunning, "parameter": ["dump1090"]})
-        self.checks.append({"type":"label","name": "check_sim", "function": self.check_processrunning, "parameter": ["sim.py"]})
-        self.checks.append({"type":"label","name": "media", "function": self.check_df,"parameter": ["media","label"]})
-        self.checks.append({"type":"plot","name": "media_plot", "size":30, "function": self.check_df,"parameter": ["media","plot"]})
-        self.checks.append({"type":"label","name": "check_reader", "function": self.check_processrunning, "parameter": ["beast_reader.py"]})
-        self.checks.append({"type":"label","name": "file_written", "function": self.check_file_write, })
-        self.checks.append({"type":"label","name": "check_messages", "function": self.check_received_messages})
-
+        if self.is_master:
+            #self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
+            self.elements.append({"type": "label", "name": "internet", "function": self.check_internet})
+            self.elements.append({"type": "label", "name": "check_dump1090", "function": self.check_processrunning, "parameter": ["dump1090"]})
+            self.elements.append({"type": "label", "name": "check_sim", "function": self.check_processrunning, "parameter": ["sim.py"]})
+            self.elements.append({"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
+            self.elements.append({"type": "plot", "name": "media_plot", "history":30, "function": self.check_df, "parameter": ["media", "plot"]})
+            self.elements.append({"type": "label", "name": "check_reader", "function": self.check_processrunning, "parameter": ["beast_reader.py"]})
+            self.elements.append({"type": "label", "name": "file_written", "function": self.check_file_write, })
+            self.elements.append({"type": "label", "name": "check_messages", "function": self.check_received_messages})
+            self.elements.append({"type": "button","name":"Wifi-Setup","function":self.set_wifi})
+            self.elements.append({"type": "button","name":"Show Plot","function":self.set_show_plot})
+        else: #Slave
+            self.elements = self.get_elements() #Gets the Elements from Master
+            #Now Add the functions, that must be called by the "Slave"
+            for itm in self.elements:
+                if itm["type"] in  ["label","plot"]:
+                    itm["function"] = lambda n=itm['name']: self.get_state_from_received_data(n) #This n=itm["name" see: https://stackoverflow.com/questions/19837486/lambda-in-a-loop
+                elif itm["type"] == "button":
+                    itm["function"]=lambda  n=itm['name']: self.request_command(n)
+                else:
+                    raise ValueError("SLAVE-Mode: Unkown Type >{}< in widget list".format(itm["type"]))
         self.labels = []  # creates an empty list for your labels
         self.plots = []
-        for i,itm in enumerate(self.checks):  # iterates over your nums
+        self.buttons = []
+        for i,itm in enumerate(self.elements):  # iterates over your nums
+            r = (i)%self.row_count +1
+            c = (i)//self.row_count
+            if itm["name"] not in self.check_names:
+                self.check_names.append(itm["name"])
+            else:
+                raise ValueError("Duplicate Name for check! Please create individaul names")
             if itm["type"] == "label":
                 label = Label(self.mainFrame, text=itm['name'],anchor="center")  # set your text
                 itm['widget'] = label
-                label.grid(row=i+1,column=0, sticky='nswe', padx=5, pady=1)
+                label.grid(row=r,column=c, sticky='nswe', padx=5, pady=1)
                 self.labels.append(label)  # appends the label to the list for further use
             elif itm["type"] == "plot":
-                plot=Plotwindow(self.mainFrame, itm.get('size',10), (10, 10))
+                plot=Plotwindow(self.mainFrame, itm.get('history',10), (10, 10))
                 itm['widget'] = plot
-                plot.widget.grid(row=i+1, column=0, sticky='nswe', padx=5, pady=1)
+                plot.widget.grid(row=r, column=c, sticky='nswe', padx=5, pady=1)
                 self.plots.append(plot)
+            elif itm['type'] == "button":
+                button = Button(self.mainFrame, text=itm['name'],
+                                command=itm['function']) #fisrt-case: master , second slave
+                itm['widget'] = button
+                button.grid(row=r, column=c, sticky='nswe', padx=5, pady=5, ipady=20)
+                self.buttons.append(button)
+
             else:
                 print("Error, unkown check type")
-
-        self.options =[]
-        self.options.append({"name":"Wifi-Setup","function":self.set_wifi})
-        self.options.append({"name":"Show Plot","function":self.set_show_plot})
-        self.buttons = []
-        for i, itm in enumerate(self.options):
-            button = Button(self.mainFrame,text=itm['name'],command=itm['function'])
-            itm['button'] = button
-            button.grid(row=0, column=i+1, sticky='nswe', padx=5, pady=5,ipady=20 )
-            self.buttons.append(button)
-
 
         ######
         #Logger GUI:
@@ -153,7 +202,7 @@ class GUI:
         self.textLog.tag_config('WARNING', foreground='orange')
         self.textLog.tag_config('ERROR', foreground='red')
         self.textLog.tag_config('CRITICAL', foreground='red', underline=1)
-        self.textLog.grid(row=1, column=1, rowspan=len(self.labels),columnspan=len(self.buttons), sticky="nsew",
+        self.textLog.grid(row=1, column=1+len(self.elements)//self.row_count, rowspan=self.row_count, columnspan=2, sticky="nsew",
                                      padx=5, pady=1)
 
         self.text_handler = TextHandler(self.textLog)
@@ -165,14 +214,15 @@ class GUI:
         #self.panel.grid(row=len(self.buttons), column=2, rowspan=len(self.labels) - len(self.buttons), sticky="we",
         #                padx=5, pady=1)
 
-        for i in range(0,len(self.labels)+1):
+        for i in range(0,self.row_count+1):
             self.mainFrame.rowconfigure(i,weight=1)
-        for i in range(0,len(self.buttons)):
-            self.mainFrame.columnconfigure(1+i,weight=1)
-
+        for i in range(0,1+len(self.elements)//self.row_count):
+            self.mainFrame.columnconfigure(i,weight=1)
+        self.mainFrame.columnconfigure(1+len(self.elements)//self.row_count,weight=3)#The textbox
         #######
         #Start
         #######
+        self.send_elements()
         self.sys_check()
         #############
 
@@ -182,7 +232,7 @@ class GUI:
         self.window.geometry("1024x768")
         #self.fullScreenState = True
         #self.window.attributes("-fullscreen", self.fullScreenState)
-   
+
         self.window.mainloop()
 
     def toggleFullScreen(self, event):
@@ -195,26 +245,132 @@ class GUI:
         self.window.attributes("-fullscreen", self.fullScreenState)
         self.logger.debug("Fullscreen quit")
 
-    def sys_check(self):
-        for itm in self.checks:
-            state, result = itm['function'](*itm.get('parameter', []))
-            self.update_widget_state(itm['widget'],itm['type'], state, result)
-            if state == False:
-                self.bad += 1
-            else:
-                self.bad = 0
+    def stingify_elements(self):
+        data={"elements":[]}
+        export = self.elements.copy()
+        for item in export:
+            itm=item.copy()
+            del itm["function"]
+            del itm["widget"]
+            try:
+                del itm["parameter"]
+            except Exception:
+                pass
+            data['elements'].append(itm)
+        return json.dumps(data)
+    def get_elements(self):
+        i=0
+        while True:
+            i+=1
+            self.logger.info("Requesting Masters Config. This may take a while....")
+            try:
+                self.request_command("init")
+                sleep(5)
+                obj = json.loads(self.receive_blocking())
+            except:
+                self.logger.error("Error retrieving Masters Config. Retrying. {}".format(i))
+                sleep(5)
 
-        if self.bad > 10:
-            img=self.take_screenshot()
-            with open('piMon.log','r') as f:
-                output = f.read()
+        return obj["elements"]
+    def send_elements(self):
+        '''
+        Sends the GUI Elements over IO
+        This function is only called in the Master mode.
+        :return:
+        '''
+        self.io.send(self.stingify_elements())
+
+
+    def request_command(self,command_name):
+        '''
+        This function is only called in the Slave mode.
+        :param button_name:
+        :return:
+        '''
+        print("REQUESTING Command {}".format(command_name))
+        self.logger.info("Transmitting Command Request: {}".format(command_name))
+        self.io.send(json.dumps({"command":command_name}))
+
+    def get_state_from_received_data(self,widget_name):
+        '''
+              This function is only called in the Slave mode.
+        '''
+        #print("Getting Data from the Masters Data >{}".format(widget_name))
+        if widget_name not in self.s_last_results:
+            return False,"N/A"
+        return  self.s_last_results[widget_name]["state"],self.s_last_results[widget_name]["result"]
+
+
+    def do_IO(self):
+        '''
+        Dependent on self.is_master This funktion either sends the current state, or receives from the master.
+        Secondly, in case of Master ifd handels requests from the slave:
+        :return:
+        '''
+
+        if self.is_master:
+            #Gather the current UI state
+            ui_state={}
+            for itm in self.elements:
+                if itm["type"] == "label":
+                    if "green" in str(itm["widget"].cget('background'))  :
+                        state=True
+                    else:
+                        state=False
+                    ui_state[itm["name"]]={"state":state
+                                            ,"result":itm["widget"].cget("text")}
+
+                elif itm["type"] == "plot":
+                    ui_state[itm["name"]] = {"state": True
+                                            , "result": itm["widget"].getLast()}
+            #TODO: hier noch mehr zusammen sammeln und dan versenden
+            self.io.send(json.dumps(ui_state))
+
+            ###################
+            ##Handle Incomming Commands
+            rcv=self.io.receive_pending()
+            try:
+                obj=json.loads(rcv)
+                if obj["command"] == "init":
+                    self.send_elements()
+                else:
+                    for itm in self.buttons:
+                        if itm["name"]== obj["command"]:
+                            itm["function"]() #Call the Funktions
+            except:
+                self.logger.error("Bad formatted incomming command {}".format(rcv))
+
+        else:
+            #TODO, hier ggf. ein subelement, für die GUI Sachen .
+            data=self.io.receive_pending()
+            try:
+                self.s_last_results=json.loads(data)
+            except:
+                print("Non Parseable Serial string",data)
+                self.s_last_results={}
+
+
+
+    def sys_check(self):
+        '''
+        In case of MAster, the class functions are called.
+        In Case of slve the get_state_from_received_data funcktion is called.
+        :return:
+        '''
+        for itm in self.elements:
+            if itm['type'] in ["label","plot"]:
+                state, result = itm['function'](*itm.get('parameter', []))
+                self.update_widget_state(itm['widget'],itm['type'], state, result)
+
+        ###
+        #Execute IO Things
+        self.do_IO()
 
         self.window.after(10000, self.sys_check)
 
 
     def update_widget_state(self,widget,type, state, result_value):
         result = False
-
         if type == "label":
             color = ('green3' if state else 'orange red')
             if str(widget.cget('background')) != color:
@@ -227,11 +383,14 @@ class GUI:
             widget['background'] = color
             widget['text'] = result_value
         elif type == "plot":
-            widget.append(result_value)
+            if state == True:
+                widget.append(result_value)
         else:
             self.logger.error("Unknown widget type could not be updated")
         return result_value
-
+#################################################################################################################
+#################################################################################################################
+#################################################################################################################
     def set_wifi(self):
         #todo:https://raspberrypi.stackexchange.com/questions/104887/information-about-network-gui-in-raspbian
         self.logger.debug("Wifi Setup called")
@@ -341,8 +500,7 @@ class GUI:
                 # Check if process name contains the given name string.
                 if any(processName in ext for ext in proc.cmdline()) or processName in proc.name():
                     return True, "{} is running {:.1f} days".format(processName,
-                                                                                  (time.time() - proc.create_time()) / (
-                                                                                              3600 *24))
+                                                (time.time() - proc.create_time()) / (3600 *24))
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
         return False, f"{processName} not running"
@@ -356,6 +514,6 @@ class GUI:
         return path
 
 if __name__ == '__main__':
-    app = GUI()  
+    app = GUI(is_master=True)
 
 
