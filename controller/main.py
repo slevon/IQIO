@@ -7,6 +7,7 @@ import json
 import os
 from socket import timeout
 from time import sleep
+from tkinter import ttk
 
 from plotWidget import Plotwindow
 
@@ -70,26 +71,35 @@ class TextHandler(logging.Handler):
         # This is necessary because we can't modify the Text from other threads
         self.text.after(0, append)
 
-
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
 class StatIo:
     def __init__(self, port,crc=True):
         self.connected = False
         self.check_crc = crc
         try:
             self.ser = serial.Serial(port,timeout=0.5)  # open serial port NON-Blocking read
-            self.connected = True
-            print(self.ser.name)  # check which port was really used
+            if self.ser.is_open:
+                self.connected = True
+                print("Port Open")  # check which port was really used
         except Exception as e:
             self.connected = False
-            print("IO Excpetion",e)
+            print("IO Excpetion in connection {} {}".format(port,self),e)
     def setCrcCheck(self,enable=True):
         self.check_crc=enable
+    def setCompression(self,enable=True):
+        self.compression=enable
     def __del__(self):
         if self.connected:
             self.ser.close()  # close port
     def send(self,data):
         if self.connected:
-            self.ser.write((data+self.getCrc(data,from_to_string=True)+"\n").encode())
+            tbsent=(data+self.getCrc(data,from_to_string=True)).encode()
+            self.ser.write(tbsent+b'\n')
+            return True
+        else:
+            return False
     def receive_pending(self):
         payload = ""
         if self.connected:
@@ -122,10 +132,20 @@ class StatIo:
         else:
             crc="{:08x}".format(zlib.crc32(data)).encode()
         return crc
-
+##################################################################################################################
+##################################################################################################################
+##################################################################################################################
 class GUI():
     def __init__(self, is_slave=True, port="/dev/ttyUSB0"):
         self.window = Tk()
+        # Import the tcl file
+        #see: https://github.com/rdbende/Azure-ttk-theme
+        self.window.tk.call('source', 'themes/azure-dark.tcl')
+        self.window.tk.call('source', 'themes/azure.tcl')
+        # Set the theme with the theme_use method
+        ttk.Style().theme_use('azure')
+        self.theme_dark=False
+        #ttk.Style().theme_use('azure-dark')
         self.window.title('Control: {}'.format("Slave" if is_slave else "Master"))
         Grid.rowconfigure(self.window, 0, weight=1)
         Grid.columnconfigure(self.window, 0, weight=1)
@@ -135,6 +155,9 @@ class GUI():
         self.mainFrame = Frame(self.window)
 
         self.mainFrame.grid(row=0, column=0, sticky=N + S + E + W)
+        #cbB=Checkbutton( self.mainFrame, text='Theme ', style='Switch', variable=self.theme_dark,command=self.toggle_theme)
+        cbB=Checkbutton( self.mainFrame, text='Theme ', style='ToggleButton', variable=self.theme_dark,command=self.toggle_theme)
+        cbB.grid(row=0,column=3,sticky="e")
 
         #######################
         # Logger:
@@ -193,9 +216,6 @@ class GUI():
         self.check_names=[]
         self.elements = []
 
-
-
-
         #############
         # Settings:
         ############
@@ -214,33 +234,28 @@ class GUI():
                     raise ValueError("SLAVE-Mode: Unkown Type >{}< in widget list".format(itm["type"]))
                     # self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
         else: #Master
+            self.elements.append({"type": "label", "name": "self", "function": self.check_self})
             self.elements.append({"type": "label", "name": "internet", "function": self.check_internet})
-            self.elements.append(
-                {"type": "label", "name": "check_dump1090", "function": self.check_processrunning,
-                 "parameter": ["dump1090"]})
-            self.elements.append({"type": "label", "name": "check_sim", "function": self.check_processrunning,
-                                  "parameter": ["sim.py"]})
-            self.elements.append(
-                {"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
-            self.elements.append(
-                {"type": "plot", "name": "media_plot", "history": 30, "function": self.check_df,
-                 "parameter": ["media", "plot"]})
-            self.elements.append(
-                {"type": "label", "name": "check_reader", "function": self.check_processrunning,
-                 "parameter": ["beast_reader.py"]})
+            self.elements.append({"type": "label", "name": "check_samplesToFile", "function": self.check_processrunning,"parameter": ["samplesToFile"]})
+            self.elements.append({"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
+            self.elements.append({"type": "plot", "name": "media_plot", "history": 30, "function": self.check_df,"parameter": ["media", "plot"]})
+            self.elements.append({"type": "label", "name": "check_reader", "function": self.check_processrunning,"parameter": ["beast_reader.py"]})
             self.elements.append({"type": "label", "name": "file_written", "function": self.check_file_write, })
-            self.elements.append(
-                {"type": "label", "name": "check_messages", "function": self.check_received_messages})
+            self.elements.append({"type": "label", "name": "rate", "function": self.check_rate, })
+            self.elements.append({"type": "plot", "name": "Disk Queue", "function": self.plot_queue, })
+            self.elements.append({"type": "label", "name": "clipping", "function": self.check_clipping})
             self.elements.append({"type": "button", "name": "Wifi-Setup", "function": self.set_wifi})
-            self.elements.append({"type": "button", "name": "Show Plot", "function": self.set_show_plot})
+            self.elements.append({"type": "button", "name": "Show Plot","function": self.set_show_plot})
 
 
         self.labels = []  # creates an empty list for your labels
         self.plots = []
         self.buttons = []
+        rowcnt=0
         for i,itm in enumerate(self.elements):  # iterates over your nums
-            r = (i)%self.row_count +1
-            c = (i)//self.row_count
+            r = (rowcnt)%self.row_count +1
+            c = (rowcnt)//self.row_count
+            rowcnt+=1 ##Plot will always be tow rows high
             if itm["name"] not in self.check_names:
                 self.check_names.append(itm["name"])
             else:
@@ -251,10 +266,11 @@ class GUI():
                 label.grid(row=r,column=c, sticky='nswe', padx=5, pady=1)
                 self.labels.append(label)  # appends the label to the list for further use
             elif itm["type"] == "plot":
-                plot=Plotwindow(self.mainFrame, itm.get('history',10), (10, 10))
+                plot=Plotwindow(self.mainFrame,itm["name"], itm.get('history',10), (10, 10))
                 itm['widget'] = plot
-                plot.widget.grid(row=r, column=c, sticky='nswe', padx=5, pady=1)
+                plot.widget.grid(row=r, column=c, rowspan=2, sticky='nswe', padx=5, pady=1)
                 self.plots.append(plot)
+                rowcnt += 1
             elif itm['type'] == "button":
                 button = Button(self.mainFrame, text=itm['name'],
                                 command=itm['function']) #fisrt-case: master , second slave
@@ -299,6 +315,15 @@ class GUI():
 
         self.window.mainloop()
 
+    def toggle_theme(self):
+        print("theme change")
+        self.theme_dark = not self.theme_dark
+        if self.theme_dark:
+            ttk.Style().theme_use('azure-dark')
+            self.textLog.config(bg='#A0A0A0')
+        else:
+            ttk.Style().theme_use('azure')
+            self.textLog.config(bg='#FFFFFF')
     def toggleFullScreen(self, event):
         self.fullScreenState = not self.fullScreenState
         self.window.attributes("-fullscreen", self.fullScreenState)
@@ -373,7 +398,7 @@ class GUI():
                 print("Command receive", e)
 
 
-        self.window.after(2000, self.handle_command_requests)
+        self.window.after(1000, self.handle_command_requests)
 
     def request_command(self,command_name):
         '''
@@ -483,6 +508,16 @@ class GUI():
     def set_show_plot(self):
         self.logger.debug("Showing Plot")
 
+
+###################################################################################################################
+###################################################################################################################
+###################################################################################################################
+
+    def check_self(self):
+        if self.io.connected:
+            return True, "Port Connected"
+        #TODO More selftests
+        return False,"Selftest failed"
     def check_internet(self,):
         conn = httplib.HTTPConnection("www.google.com", timeout=5)
         try:
@@ -494,7 +529,7 @@ class GUI():
             return False, "Internet not available"
 
     def check_file_write(self,max_time_diff=600):
-        path_s = self.path + '*.csv'
+        path_s = self.path + '*.dat'
         list_of_files = glob.glob(path_s)  # * means all if need specific format then *.csv
         if not list_of_files:
             return False, "No Files found"
@@ -506,10 +541,6 @@ class GUI():
             return False, "File {} ist stale ({:.1}MB)".format(os.path.basename(latest_file), size)
         return True, "File {} is written ({:.1}MB)".format(os.path.basename(latest_file), size)
 
-    def check_port_in_use(self,port=8012):
-        # result=subprocess.check_output(['lsof', '-i','-P','-n','|','grep',':443'])
-        # print(result)
-        return True, "Port check Todo"
 
     def check_df(self,grep_filter="media",return_type="label"):
         #result=subprocess.check_output(['df', '-h','|','grep',grep_filter])
@@ -537,24 +568,65 @@ class GUI():
             return True, int(random.randint(0,22)) #free GB
         return False, "Error"
 
-    def check_received_messages(self):
-        path_s = self.path + 'log*.csv'
-        list_of_files = glob.glob(path_s)  # * means all if need specific format then *.csv
-        if not list_of_files:
-            return False, "No message files found"
-        latest_file = max(list_of_files, key=os.path.getctime)
-        with open(latest_file, 'rb') as f:
+    def _get_file_line(self, file, field_name=None):
+        '''
+               :param field_name:  If None ist specified, all Field will be returned
+               :return:
+               '''
+        with open(file, 'rb') as f:
             f.seek(-2, os.SEEK_END)
             while f.read(1) != b'\n':
                 f.seek(-2, os.SEEK_CUR)
             last_line = f.readline().decode()
 
-        cols = last_line.split(";")
-        if int(cols[5]) > 0:
-            return True, "Rx Messages: {}".format(cols[5])
+        cols = last_line.split(",")
+        if len(cols) > 2:
+            if field_name:
+                for idx, itm in enumerate(cols):
+                    if field_name in itm:
+                        return itm.split(":")[-1]
+            else:
+                return cols
         else:
-            return False, "No Messages received"
+            return "No Messages received"
 
+    def check_clipping(self):
+        '''
+        :return:
+        '''
+        #path_s = self.path + 'log*.csv'
+        #list_of_files = glob.glob(path_s)  # * means all if need specific format then *.csv
+        #if not list_of_files:
+        #    return False, "No Logs found"
+        #latest_file = max(list_of_files, key=os.path.getctime)
+
+        data=self._get_file_line("/home/slevon/Desktop/test.log","clipping")
+        retString="Rx-Clipping: {}".format(data)
+        try:
+            if int(data) == 0:
+                return True,retString
+            else:
+                return False,retString
+
+
+
+        except:
+            pass
+        return False,retString
+
+    def plot_queue(self):
+        data=self._get_file_line("/home/slevon/Desktop/test.log","queue")
+        try:
+            return True, int(data)
+        except:
+            return False,0
+
+    def check_rate(self):
+        data=self._get_file_line("/home/slevon/Desktop/test.log","rate")
+        try:
+            return True, "Rate: {} MSPS".format(data)
+        except:
+            return False,"Rate: Unknown"
     def check_processrunning(self,processName):
         '''
         Check if there is any running process that contains the given name processName.
@@ -564,11 +636,11 @@ class GUI():
             try:
                 # Check if process name contains the given name string.
                 if any(processName in ext for ext in proc.cmdline()) or processName in proc.name():
-                    return True, "{} is running {:.1f} days".format(processName,
-                                                (time.time() - proc.create_time()) / (3600 *24))
+                    return True, "{}\nis running {:.1f} mins".format(processName,
+                                                (time.time() - proc.create_time()) / (60))
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
-        return False, f"{processName} not running"
+        return False, f"{processName}\nnot running"
 
 
 
@@ -585,7 +657,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-s',"--slave", action='store_true', help="start Controller in Slave mode (Running on the Ground Station)")
     parser.add_argument('-l', '--list', action='store_true', help="List avialable devices and exit")
-    parser.add_argument('-p', '--port', help="sets UART Port", type=str)
+    parser.add_argument('-p', '--port', help="sets UART Port", type=str ,default="/dev/ttyUSB0")
     args = parser.parse_args()
     if args.list:
         ports = serial.tools.list_ports.comports(include_links=False)

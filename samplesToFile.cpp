@@ -4,7 +4,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-
+#include <stdlib.h>
+#include <limits>
 #include <uhd/exception.hpp>
 #include <uhd/types/tune_request.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
@@ -18,22 +19,119 @@
 #include <csignal>
 #include <fstream>
 #include <iostream>
+//Thread
+#include <utility>
 #include <thread>
+#include <queue>
+///////////////////////////////////////////////////////
+//RA new for Compression
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/copy.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+///////////////////////////////////////////////////////
+//Use multiple Threads, one for consuming, and one for fiel writing
+
+unsigned int  clipping_occured =0;
+template<typename Data>
+class concurrent_queue
+{
+private:
+    std::queue<Data> the_queue;
+    mutable boost::mutex the_mutex;
+    boost::condition_variable the_condition_variable;
+public:
+    void push(Data const& data)
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        the_queue.push(data);
+        lock.unlock();
+        the_condition_variable.notify_one();
+    }
+
+    bool empty() const
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        return the_queue.empty();
+    }
+
+    bool try_pop(Data& popped_value)
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        if(the_queue.empty())
+        {
+            return false;
+        }
+
+        popped_value=the_queue.front();
+        the_queue.pop();
+        return true;
+    }
+
+    void wait_and_pop(Data& popped_value)
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        while(the_queue.empty())
+        {
+            the_condition_variable.wait(lock);
+        }
+
+        popped_value=the_queue.front();
+        the_queue.pop();
+    }
+
+    unsigned int size()
+    {
+        boost::mutex::scoped_lock lock(the_mutex);
+        return the_queue.size();
+    }
+
+};
+
 
 namespace po = boost::program_options;
+using namespace std;
 
 static bool stop_signal_called = false;
 void sig_int_handler(int)
 {
     stop_signal_called = true;
 }
-
+///////////////////////////////////////////////////////////////////////////
+template <typename samp_type>
+void writeToFile(std::ostream &out,
+	concurrent_queue<long>& queue_size,
+	concurrent_queue<std::vector<samp_type> >& queue_data){
+  	//////////////////////////
+  	//Write To File
+  	/////////////////////////
+  	long size;
+  	std::vector<samp_type> data;
+  	while (!(stop_signal_called) ){
+  		if(!queue_size.try_pop(size)
+        || !queue_data.try_pop(data)){
+          sleep(0.5);
+        }else{
+            //check for clipping:
+            // C++14
+            auto maxelem = max_element(data.begin(), data.end(),
+                                       [](auto a, auto b) { return abs(a) < abs(b); });
+            double nabs=abs(*maxelem);
+            if(nabs > 0.95 and nabs < 1){ //the float case
+                clipping_occured++;
+            }else if(nabs > 32767 * 0.95 ){ //the "short case"
+                clipping_occured++;
+            }
+            out.write((const char*)&data.front(), size);
+        }
+  	}
+    std::cout<<"Finishing Thread"<<std::endl;
+	}
 template <typename samp_type>
 void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     const std::string& cpu_format,
     const std::string& wire_format,
     const size_t& channel,
-    const std::string& file,
+    std::string& file,  //RA Const removed
     size_t samps_per_buff,
     unsigned long long num_requested_samples,
     double time_requested       = 0.0,
@@ -42,8 +140,9 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     bool null                   = false,
     bool enable_size_map        = false,
     bool continue_on_bad_packet = false,
-    int rotate_time       = 0)
+    bool compress_file			    = false)//RA
 {
+	std::string comp_ext =".gz";//RA
     unsigned long long num_total_samps = 0;
     // create a receive streamer
     uhd::stream_args_t stream_args(cpu_format, wire_format);
@@ -53,12 +152,40 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     uhd::rx_streamer::sptr rx_stream = usrp->get_rx_stream(stream_args);
 
     uhd::rx_metadata_t md;
-    std::vector<samp_type> buff(samps_per_buff);
-    std::ofstream outfile;
-    if (not null)
-        outfile.open(file.c_str(), std::ofstream::binary);
-    bool overflow_message = true;
+    std::vector<samp_type > buff(samps_per_buff);
 
+    //////
+    //File
+    //////
+    if(compress_file){
+	     file +=comp_ext;
+	    }
+    std::ofstream outfile;
+    if (not null){
+        outfile.open(file.c_str(), std::ofstream::binary);
+	     }
+    //////
+    //RA Adding Compression
+    ///////
+    boost::iostreams::filtering_streambuf<boost::iostreams::output> outbuf;
+    if(compress_file){
+		    outbuf.push(boost::iostreams::gzip_compressor());
+	   }
+    outbuf.push(outfile);
+    //Convert streambuf to ostream
+    std::ostream out(&outbuf);
+    /////////////////////////////////////////////
+    //Threading
+    ////////////////////////////////////////////
+  	concurrent_queue<std::vector<samp_type> > queue_data;
+  	concurrent_queue<long> queue_size;
+  	std::cout<<"Starting write thread"<<endl;
+  	std::thread writeThread(writeToFile<samp_type>,
+  				std::ref(out),std::ref(queue_size),
+          std::ref(queue_data));
+  	/////////
+  	/////////
+  	/////////
     // setup streaming
     uhd::stream_cmd_t stream_cmd((num_requested_samples == 0)
                                      ? uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS
@@ -76,8 +203,8 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     // Track time and samps between updating the BW summary
     auto last_update                     = start_time;
     unsigned long long last_update_samps = 0;
-    auto last_update_file				= start_time;
-	unsigned long long logrotate_cnt = 0;
+
+
     // Run this loop until either time expired (if a duration was given), until
     // the requested number of samples were collected (if such a number was
     // given), or until Ctrl-C was pressed.
@@ -88,35 +215,14 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
 
         size_t num_rx_samps =
             rx_stream->recv(&buff.front(), buff.size(), md, 3.0, enable_size_map);
-            
-        num_total_samps += num_rx_samps;
-        /////////
-		//file rotation
-        const auto time_since_last_update = now - last_update_file;
-		if (time_since_last_update > std::chrono::seconds(rotate_time)) {
-			std::string offset=file+std::to_string(logrotate_cnt++);
-			std::cout<<"File-rotate"<<offset<<std::endl;
-			if (outfile.is_open()) {
-				outfile.close();
-			}
-			outfile.open(offset.c_str(), std::ofstream::binary);
-			last_update_file = now;
-		}
 
         if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_TIMEOUT) {
-            std::cout << boost::format("Timeout while streaming") << std::endl;
+            std::cerr << boost::format("Timeout while streaming") << std::endl;
+            stop_signal_called =true;
             break;
         }
         if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW) {
-			std::cerr<<"#";
-            if (overflow_message) {
-                overflow_message = false;
-                std::cerr
-                    << boost::format(
-                           "Got an overflow indication. Please consider the following:\n"
-                           "  Your write medium must sustain a rate of %fMB/s.\n")
-                           % (usrp->get_rx_rate(channel) * sizeof(samp_type) / 1e6);
-            }
+                std::cerr<<"0";
             continue;
         }
         if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
@@ -135,13 +241,15 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
             mapSizes[num_rx_samps] += 1;
         }
 
-
-        if (outfile.is_open()) {
-            outfile.write((const char*)&buff.front(), num_rx_samps * sizeof(samp_type));
+        num_total_samps += num_rx_samps;
+        ////////////
+        //Hand over to Thread
+        ////////////
+        if (not null){
+	          queue_size.push(num_rx_samps * sizeof(samp_type));
+	          queue_data.push(buff);
         }
-		
-        			
-
+        //Echo summary
         if (bw_summary) {
             last_update_samps += num_rx_samps;
             const auto time_since_last_update = now - last_update;
@@ -149,9 +257,12 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
                 const double time_since_last_update_s =
                     std::chrono::duration<double>(time_since_last_update).count();
                 const double rate = double(last_update_samps) / time_since_last_update_s;
-                std::cout << "\t" << (rate / 1e6) << " Msps" << std::endl;
+                std::cout << "rate:" << (rate / 1e6)
+                          << ",unit:\"Msps\",\tqueue:"<<queue_data.size()
+                          <<",clipping:"<<clipping_occured<<std::endl;
                 last_update_samps = 0;
                 last_update       = now;
+                clipping_occured = 0;
             }
         }
     }
@@ -160,8 +271,15 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     stream_cmd.stream_mode = uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS;
     rx_stream->issue_stream_cmd(stream_cmd);
 
+    //////////
+    //Stop the thread:
+    stop_signal_called = true;
+    writeThread.join();
+    std::cout<<"Thread endend"<<endl;
+
     if (outfile.is_open()) {
-        outfile.close();
+      boost::iostreams::close(outbuf); // Don't forget this!
+      outfile.close();
     }
 
     if (stats) {
@@ -192,8 +310,9 @@ bool check_locked_sensor(std::vector<std::string> sensor_names,
     double setup_time)
 {
     if (std::find(sensor_names.begin(), sensor_names.end(), sensor_name)
-        == sensor_names.end())
+        == sensor_names.end()){
         return false;
+    }
 
     auto setup_timeout = std::chrono::steady_clock::now()
                          + std::chrono::milliseconds(int64_t(setup_time * 1000));
@@ -234,7 +353,6 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     std::string args, file, type, ant, subdev, ref, wirefmt;
     size_t channel, total_num_samps, spb;
     double rate, freq, gain, bw, total_time, setup_time, lo_offset;
-    int rotate;
 
     // setup the program options
     po::options_description desc("Allowed options");
@@ -266,7 +384,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         ("continue", "don't abort on a bad packet")
         ("skip-lo", "skip checking LO lock status")
         ("int-n", "tune USRP with integer-N tuning")
-        ("rotate", po::value<int>(&rotate)->default_value(10), "number of seconds between file rotate default:10")
+        ("compress", "Use Deflate to create compressed file") //RA
     ;
     // clang-format on
     po::variables_map vm;
@@ -288,10 +406,19 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     bool null                   = vm.count("null") > 0;
     bool enable_size_map        = vm.count("sizemap") > 0;
     bool continue_on_bad_packet = vm.count("continue") > 0;
+    bool compress_file			    = vm.count("compress") > 0; //RA
 
-    if (enable_size_map)
+    if (compress_file){
+
+    	std::cout<<"File compression active" << endl;
+    }else{
+    	std::cout<<"File compression NOT active"<<endl;
+    }
+
+    if (enable_size_map){
         std::cout << "Packet size tracking enabled - will only recv one packet at a time!"
                   << std::endl;
+    }
 
     // create a usrp device
     std::cout << std::endl;
@@ -305,8 +432,9 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     }
 
     // always select the subdevice first, the channel mapping affects the other settings
-    if (vm.count("subdev"))
+    if (vm.count("subdev")){
         usrp->set_rx_subdev_spec(subdev);
+    }
 
     std::cout << boost::format("Using Device: %s") % usrp->get_pp_string() << std::endl;
 
@@ -360,8 +488,9 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     }
 
     // set the antenna
-    if (vm.count("ant"))
+    if (vm.count("ant")){
         usrp->set_rx_antenna(ant, channel);
+    }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(1000 * setup_time)));
 
@@ -409,9 +538,8 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         stats,                    \
         null,                     \
         enable_size_map,          \
-        continue_on_bad_packet,    \
-        rotate)
-    // recv to file
+        continue_on_bad_packet,	  \
+        compress_file) // recv to file
     if (wirefmt == "s16") {
         if (type == "double")
             recv_to_file<double> recv_to_file_args("f64");
@@ -431,7 +559,6 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         else
             throw std::runtime_error("Unknown type " + type);
     }
-
     // finished
     std::cout << std::endl << "Done!" << std::endl << std::endl;
 

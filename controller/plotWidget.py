@@ -7,11 +7,12 @@ plt.use('TkAgg')
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class Plotwindow():
-    def __init__(self, masterframe,history, size):
+    def __init__(self, masterframe,title, history, size):
         (w,h)=size
         inchsize=(w/25.4, h/25.4)
         self.figure = Figure(inchsize)
         self.figure.tight_layout()
+        self.figure.suptitle(title,fontsize=10)
         self.axes = self.figure.add_subplot(111)
         self.history = history
         self.data=[0]
@@ -36,7 +37,10 @@ class Plotwindow():
             del self.indices[0]
         self.axes.plot(self.indices,self.data)
         # self.figure.tight_layout()
-        self.figure.tight_layout()
+        try:
+            self.figure.tight_layout()
+        except:
+            pass
         self.canvas.draw()
 
     def getLast(self):

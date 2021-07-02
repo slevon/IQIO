@@ -111,19 +111,6 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named samplesToFileThreaded
-
-# Build rule for target.
-samplesToFileThreaded: cmake_check_build_system
-	$(MAKE) -f CMakeFiles/Makefile2 samplesToFileThreaded
-.PHONY : samplesToFileThreaded
-
-# fast build rule for target.
-samplesToFileThreaded/fast:
-	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/build
-.PHONY : samplesToFileThreaded/fast
-
-#=============================================================================
 # Target rules for targets named samplesToFile
 
 # Build rule for target.
@@ -163,33 +150,6 @@ samplesToFile.cpp.s:
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/samplesToFile.cpp.s
 .PHONY : samplesToFile.cpp.s
 
-samplesToFileThreaded.o: samplesToFileThreaded.cpp.o
-
-.PHONY : samplesToFileThreaded.o
-
-# target to build an object file
-samplesToFileThreaded.cpp.o:
-	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/samplesToFileThreaded.cpp.o
-.PHONY : samplesToFileThreaded.cpp.o
-
-samplesToFileThreaded.i: samplesToFileThreaded.cpp.i
-
-.PHONY : samplesToFileThreaded.i
-
-# target to preprocess a source file
-samplesToFileThreaded.cpp.i:
-	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/samplesToFileThreaded.cpp.i
-.PHONY : samplesToFileThreaded.cpp.i
-
-samplesToFileThreaded.s: samplesToFileThreaded.cpp.s
-
-.PHONY : samplesToFileThreaded.s
-
-# target to generate assembly for a file
-samplesToFileThreaded.cpp.s:
-	$(MAKE) -f CMakeFiles/samplesToFileThreaded.dir/build.make CMakeFiles/samplesToFileThreaded.dir/samplesToFileThreaded.cpp.s
-.PHONY : samplesToFileThreaded.cpp.s
-
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -198,14 +158,10 @@ help:
 	@echo "... depend"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
-	@echo "... samplesToFileThreaded"
 	@echo "... samplesToFile"
 	@echo "... samplesToFile.o"
 	@echo "... samplesToFile.i"
 	@echo "... samplesToFile.s"
-	@echo "... samplesToFileThreaded.o"
-	@echo "... samplesToFileThreaded.i"
-	@echo "... samplesToFileThreaded.s"
 .PHONY : help
 
 
