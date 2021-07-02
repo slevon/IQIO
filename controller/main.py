@@ -1,11 +1,14 @@
+#!/usr/bin/env python
+
 ############
 #Set working dir
+import argparse
 import json
 import os
 from socket import timeout
 from time import sleep
 
-from ground.plotWidget import Plotwindow
+from plotWidget import Plotwindow
 
 abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
@@ -33,7 +36,8 @@ from logging.handlers import RotatingFileHandler
 ##########
 ##Serial
 import serial
-
+import serial.tools.list_ports
+import zlib #used for crc32
 
 try:
     import httplib
@@ -68,27 +72,98 @@ class TextHandler(logging.Handler):
 
 
 class StatIo:
-    def __init__(self):
-        self.ser = serial.Serial('/dev/ttyUSB0',timeout=0.5)  # open serial port NON-Blocking read
-        print(self.ser.name)  # check which port was really used
-        self.ser.write(b'1030 Startup')  # write a string
-
+    def __init__(self, port,crc=True):
+        self.connected = False
+        self.check_crc = crc
+        try:
+            self.ser = serial.Serial(port,timeout=0.5)  # open serial port NON-Blocking read
+            self.connected = True
+            print(self.ser.name)  # check which port was really used
+        except Exception as e:
+            self.connected = False
+            print("IO Excpetion",e)
+    def setCrcCheck(self,enable=True):
+        self.check_crc=enable
     def __del__(self):
-        self.ser.close()  # close port
+        if self.connected:
+            self.ser.close()  # close port
     def send(self,data):
-        self.ser.write(bytearray((data+"\n").encode()))
+        if self.connected:
+            self.ser.write((data+self.getCrc(data,from_to_string=True)+"\n").encode())
     def receive_pending(self):
-        data=self.ser.readline()
-        return data
+        payload = ""
+        if self.connected:
+            data=self.ser.readline()
+            if len(data)>8:
+                if self.check_crc:
+                    payload=data[:-9]
+                    crc=data[-9:-1] #cuutout crc
+                    if self.getCrc(payload) != crc:
+                        raise ValueError("CRC Error in Data")
+                else:
+                    payload=data
+        return payload
     def receive_blocking(self):
-        to = self.ser.timeout
-        self.ser.timeout = 20
-        data=self.ser.readline()
-        self.ser.timeout = to
-        return data
+        if self.connected:
+            to = self.ser.timeout
+            self.ser.timeout = 20
+            data=self.ser.readline()
+            self.ser.timeout = to
+            return data
+        return ""
+    def getCrc(self,data,from_to_string=False):
+        '''
+        Data is assumed to be a bytarray
+        :param data:
+        :return:
+        '''
+        if from_to_string:
+            crc = "{:08x}".format(zlib.crc32(data.encode()))
+        else:
+            crc="{:08x}".format(zlib.crc32(data)).encode()
+        return crc
 
 class GUI():
-    def __init__(self,is_master=True):
+    def __init__(self, is_slave=True, port="/dev/ttyUSB0"):
+        self.window = Tk()
+        self.window.title('Control: {}'.format("Slave" if is_slave else "Master"))
+        Grid.rowconfigure(self.window, 0, weight=1)
+        Grid.columnconfigure(self.window, 0, weight=1)
+        # self.window.attributes('-zoomed', True)
+        self.window.bind("<F11>", self.toggleFullScreen)
+        self.window.bind("<Escape>", self.quitFullScreen)
+        self.mainFrame = Frame(self.window)
+
+        self.mainFrame.grid(row=0, column=0, sticky=N + S + E + W)
+
+        #######################
+        # Logger:
+        ######################
+        logging.basicConfig(level="DEBUG")
+        logging.getLogger('matplotlib.font_manager').disabled = True
+        formatter = logging.Formatter('%(asctime)s %(levelname)-6s %(message)s',
+                                      datefmt='%Y-%m-%d %H:%M:%S')
+        self.logger = logging.getLogger('piMon')
+        self.handler = RotatingFileHandler('piMon.log', maxBytes=2e6, backupCount=3)
+        self.handler.setFormatter(formatter)
+        self.logger.addHandler(self.handler)
+        ######
+        #Logger GUI:
+        #######
+        self.textLog=ScrolledText(self.mainFrame,state="disabled")
+        self.textLog.configure(font='TkFixedFont')
+        self.textLog.tag_config('INFO', foreground='black')
+        self.textLog.tag_config('DEBUG', foreground='gray')
+        self.textLog.tag_config('WARNING', foreground='orange')
+        self.textLog.tag_config('ERROR', foreground='red')
+        self.textLog.tag_config('CRITICAL', foreground='red', underline=1)
+        self.text_handler = TextHandler(self.textLog)
+        self.text_handler.setFormatter(formatter)
+        self.logger.addHandler(self.text_handler)
+        #Will be added into the GUI Later!
+
+        self.logger.info('Application: startup')
+
         ###############
         #Variables
         ###############
@@ -104,35 +179,22 @@ class GUI():
                         - retrieves the States to update from the StatIo Class, does not Perform any Checks
                         
         '''
-        self.is_master =is_master
-        self.io = StatIo()
+        self.is_slave =is_slave
+        self.io = StatIo(port)
+        if not self.io.connected:
+            if self.is_slave:
+                print("Error in connection to port {}\nExiting\n\n".format(port))
+                sys.exit(-1)
+            else:
+                self.logger.warning("Could not connect to Serial-Port: {}\n\t\tSlaves will be blind.".format(port))
+        else:
+            self.logger.info("Port {} connected".format(port))
         self.s_last_results={}
         self.check_names=[]
         self.elements = []
 
-        #######################
-        #Logger:
-        ######################
-        logging.basicConfig(level="DEBUG")
-        logging.getLogger('matplotlib.font_manager').disabled = True
-        formatter=logging.Formatter('%(asctime)s %(levelname)-6s %(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
-        self.logger = logging.getLogger('piMon')
-        self.handler = RotatingFileHandler('piMon.log', maxBytes=2000, backupCount=10)
-        self.handler.setFormatter(formatter)
-        self.logger.addHandler(self.handler)
-        self.logger.info('Application: startup')
 
-        self.window = Tk()
-        Grid.rowconfigure(self.window, 0, weight=1)
-        Grid.columnconfigure(self.window, 0, weight=1)
-        #self.window.attributes('-zoomed', True)
-        self.window.bind("<F11>", self.toggleFullScreen)
-        self.window.bind("<Escape>", self.quitFullScreen)
 
-        self.mainFrame = Frame(self.window)
-
-        self.mainFrame.grid(row=0, column=0, sticky=N+S+E+W)
 
         #############
         # Settings:
@@ -140,19 +202,7 @@ class GUI():
         self.path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../reader/beastReader/')
         ##############
         #Checks
-        if self.is_master:
-            #self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
-            self.elements.append({"type": "label", "name": "internet", "function": self.check_internet})
-            self.elements.append({"type": "label", "name": "check_dump1090", "function": self.check_processrunning, "parameter": ["dump1090"]})
-            self.elements.append({"type": "label", "name": "check_sim", "function": self.check_processrunning, "parameter": ["sim.py"]})
-            self.elements.append({"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
-            self.elements.append({"type": "plot", "name": "media_plot", "history":30, "function": self.check_df, "parameter": ["media", "plot"]})
-            self.elements.append({"type": "label", "name": "check_reader", "function": self.check_processrunning, "parameter": ["beast_reader.py"]})
-            self.elements.append({"type": "label", "name": "file_written", "function": self.check_file_write, })
-            self.elements.append({"type": "label", "name": "check_messages", "function": self.check_received_messages})
-            self.elements.append({"type": "button","name":"Wifi-Setup","function":self.set_wifi})
-            self.elements.append({"type": "button","name":"Show Plot","function":self.set_show_plot})
-        else: #Slave
+        if self.is_slave:
             self.elements = self.get_elements() #Gets the Elements from Master
             #Now Add the functions, that must be called by the "Slave"
             for itm in self.elements:
@@ -162,6 +212,29 @@ class GUI():
                     itm["function"]=lambda  n=itm['name']: self.request_command(n)
                 else:
                     raise ValueError("SLAVE-Mode: Unkown Type >{}< in widget list".format(itm["type"]))
+                    # self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
+        else: #Master
+            self.elements.append({"type": "label", "name": "internet", "function": self.check_internet})
+            self.elements.append(
+                {"type": "label", "name": "check_dump1090", "function": self.check_processrunning,
+                 "parameter": ["dump1090"]})
+            self.elements.append({"type": "label", "name": "check_sim", "function": self.check_processrunning,
+                                  "parameter": ["sim.py"]})
+            self.elements.append(
+                {"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
+            self.elements.append(
+                {"type": "plot", "name": "media_plot", "history": 30, "function": self.check_df,
+                 "parameter": ["media", "plot"]})
+            self.elements.append(
+                {"type": "label", "name": "check_reader", "function": self.check_processrunning,
+                 "parameter": ["beast_reader.py"]})
+            self.elements.append({"type": "label", "name": "file_written", "function": self.check_file_write, })
+            self.elements.append(
+                {"type": "label", "name": "check_messages", "function": self.check_received_messages})
+            self.elements.append({"type": "button", "name": "Wifi-Setup", "function": self.set_wifi})
+            self.elements.append({"type": "button", "name": "Show Plot", "function": self.set_show_plot})
+
+
         self.labels = []  # creates an empty list for your labels
         self.plots = []
         self.buttons = []
@@ -186,28 +259,18 @@ class GUI():
                 button = Button(self.mainFrame, text=itm['name'],
                                 command=itm['function']) #fisrt-case: master , second slave
                 itm['widget'] = button
-                button.grid(row=r, column=c, sticky='nswe', padx=5, pady=5, ipady=20)
+                button.grid(row=r, column=c, sticky='nswe', padx=5, pady=5, ipady=5)
                 self.buttons.append(button)
 
             else:
                 print("Error, unkown check type")
 
-        ######
-        #Logger GUI:
-        #######
-        self.textLog=ScrolledText(self.mainFrame,state="disabled")
-        self.textLog.configure(font='TkFixedFont')
-        self.textLog.tag_config('INFO', foreground='black')
-        self.textLog.tag_config('DEBUG', foreground='gray')
-        self.textLog.tag_config('WARNING', foreground='orange')
-        self.textLog.tag_config('ERROR', foreground='red')
-        self.textLog.tag_config('CRITICAL', foreground='red', underline=1)
+
+
+        ##Embedd the Logger into the GUI!
         self.textLog.grid(row=1, column=1+len(self.elements)//self.row_count, rowspan=self.row_count, columnspan=2, sticky="nsew",
                                      padx=5, pady=1)
 
-        self.text_handler = TextHandler(self.textLog)
-        self.text_handler.setFormatter(formatter)
-        self.logger.addHandler(self.text_handler)
         #######
         #Plot in Layout:
         #######
@@ -222,7 +285,8 @@ class GUI():
         #######
         #Start
         #######
-        self.send_elements()
+        if not self.is_slave:
+            self.handle_command_requests()
         self.sys_check()
         #############
 
@@ -266,20 +330,50 @@ class GUI():
             try:
                 self.request_command("init")
                 sleep(5)
-                obj = json.loads(self.receive_blocking())
-            except:
-                self.logger.error("Error retrieving Masters Config. Retrying. {}".format(i))
+                obj = json.loads(self.io.receive_pending())
+                return obj["elements"]
+            except Exception as e:
+                self.logger.error("Error retrieving Masters Config. Retrying. {} {}".format(i,e))
                 sleep(5)
-
-        return obj["elements"]
+        return None
     def send_elements(self):
         '''
         Sends the GUI Elements over IO
         This function is only called in the Master mode.
         :return:
         '''
+        self.logger.info("Sending all Elements.")
         self.io.send(self.stingify_elements())
 
+    def handle_command_requests(self):
+        '''
+        Executed by Master only: Check if commands are send from the slave:
+        :return:
+        '''
+        ###################
+        ##Handle Incomming Commands
+        rcv=""
+        try:
+            rcv = self.io.receive_pending()
+        except Exception as e:
+                self.logger.warning("Reception Error {}".format(e))
+        if rcv != "":
+            try:
+                obj = json.loads(rcv)
+                self.logger.debug("Command received: {}".format(obj["command"]))
+                if obj["command"] == "init":
+                    self.send_elements()
+                else:
+                    for itm in self.elements:
+                        if itm["type"] == "button":
+                            if itm["name"] == obj["command"]:
+                                itm["function"]()  # Call the Funktions
+            except Exception as e:
+                self.logger.error("Bad formatted incomming command {}".format(rcv))
+                print("Command receive", e)
+
+
+        self.window.after(2000, self.handle_command_requests)
 
     def request_command(self,command_name):
         '''
@@ -287,7 +381,6 @@ class GUI():
         :param button_name:
         :return:
         '''
-        print("REQUESTING Command {}".format(command_name))
         self.logger.info("Transmitting Command Request: {}".format(command_name))
         self.io.send(json.dumps({"command":command_name}))
 
@@ -301,54 +394,45 @@ class GUI():
         return  self.s_last_results[widget_name]["state"],self.s_last_results[widget_name]["result"]
 
 
-    def do_IO(self):
+    def send_and_receive_states(self):
         '''
-        Dependent on self.is_master This funktion either sends the current state, or receives from the master.
+        Dependent on self.is_slave This funktion either sends the current state, or receives from the master.
         Secondly, in case of Master ifd handels requests from the slave:
         :return:
         '''
-
-        if self.is_master:
-            #Gather the current UI state
-            ui_state={}
-            for itm in self.elements:
-                if itm["type"] == "label":
-                    if "green" in str(itm["widget"].cget('background'))  :
-                        state=True
-                    else:
-                        state=False
-                    ui_state[itm["name"]]={"state":state
-                                            ,"result":itm["widget"].cget("text")}
-
-                elif itm["type"] == "plot":
-                    ui_state[itm["name"]] = {"state": True
-                                            , "result": itm["widget"].getLast()}
-            #TODO: hier noch mehr zusammen sammeln und dan versenden
-            self.io.send(json.dumps(ui_state))
-
-            ###################
-            ##Handle Incomming Commands
-            rcv=self.io.receive_pending()
+        if self.is_slave:
+            rcv=""
             try:
-                obj=json.loads(rcv)
-                if obj["command"] == "init":
-                    self.send_elements()
-                else:
-                    for itm in self.buttons:
-                        if itm["name"]== obj["command"]:
-                            itm["function"]() #Call the Funktions
-            except:
-                self.logger.error("Bad formatted incomming command {}".format(rcv))
-
-        else:
-            #TODO, hier ggf. ein subelement, für die GUI Sachen .
-            data=self.io.receive_pending()
-            try:
-                self.s_last_results=json.loads(data)
-            except:
-                print("Non Parseable Serial string",data)
+                rcv = self.io.receive_pending()
+            except Exception as e:
+                self.logger.warning("Error in receiving states from master >{}<".format(e))
+            if len(rcv)> 3:##Data received
+                try:
+                    self.s_last_results=json.loads(rcv)
+                except Exception as e:
+                    self.logger.warning("States Error Data >{}<".format(e))
+                    self.s_last_results = {}
+            else:
+                self.logger.warning("No Data received from Master")
                 self.s_last_results={}
+        else:
+                # Gather the current UI state
+                ui_state = {}
+                for itm in self.elements:
+                    if itm["type"] == "label":
+                        if "green" in str(itm["widget"].cget('background')):
+                            state = True
+                        else:
+                            state = False
+                        ui_state[itm["name"]] = {"state": state
+                            , "result": itm["widget"].cget("text")}
 
+                    elif itm["type"] == "plot":
+                        ui_state[itm["name"]] = {"state": True
+                            , "result": itm["widget"].getLast()}
+                # TODO: hier noch mehr zusammen sammeln und dann versenden
+                self.io.send(json.dumps(ui_state))
+                self.logger.debug("Sent States Data to Port")
 
 
     def sys_check(self):
@@ -363,8 +447,8 @@ class GUI():
                 self.update_widget_state(itm['widget'],itm['type'], state, result)
 
         ###
-        #Execute IO Things
-        self.do_IO()
+        #Execute IO Things for slave/Master modes
+        self.send_and_receive_states()
 
         self.window.after(10000, self.sys_check)
 
@@ -375,10 +459,10 @@ class GUI():
             color = ('green3' if state else 'orange red')
             if str(widget.cget('background')) != color:
                 if state:
-                    self.logger.info("{}".format(result_value))
+                    self.logger.info("OK: {}".format(result_value))
                     result=True
                 else:
-                    self.logger.error("{}".format(result_value))
+                    self.logger.error("NOK: {}".format(result_value))
                     result=False
             widget['background'] = color
             widget['text'] = result_value
@@ -398,25 +482,6 @@ class GUI():
 
     def set_show_plot(self):
         self.logger.debug("Showing Plot")
-        plotw = Tk()
-        plotw.attributes("-fullscreen", True)
-        label = Label(plotw)
-        #######
-        # The Plot
-        #######
-        try:
-            img = ImageTk.PhotoImage(Image.open("/run/shm/beast_plot.png"),master=plotw) ##resize ??
-            label.config(image=img)
-            label.img = img
-        except Exception as e:
-            print("No Plot",e)
-        label.pack(side=TOP, pady=10)
-
-        btn = Button(plotw,
-                     text="Close",command=plotw.destroy)
-        btn.pack(fill=tk.BOTH, ipady=10)
-        # mainloop, runs infinitely
-        plotw.mainloop()
 
     def check_internet(self,):
         conn = httplib.HTTPConnection("www.google.com", timeout=5)
@@ -514,6 +579,22 @@ class GUI():
         return path
 
 if __name__ == '__main__':
-    app = GUI(is_master=True)
+    ########################################
+    # Parse the command line arguments
+    ########################################
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s',"--slave", action='store_true', help="start Controller in Slave mode (Running on the Ground Station)")
+    parser.add_argument('-l', '--list', action='store_true', help="List avialable devices and exit")
+    parser.add_argument('-p', '--port', help="sets UART Port", type=str)
+    args = parser.parse_args()
+    if args.list:
+        ports = serial.tools.list_ports.comports(include_links=False)
+        for port in ports:
+            print(port.device)
+        sys.exit(0)
+
+
+
+    app = GUI(is_slave=args.slave,port=args.port)
 
 

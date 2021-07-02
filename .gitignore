@@ -2,3 +2,5 @@ venv
 *dat
 *dat.gz
 build
+__*
+
