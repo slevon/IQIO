@@ -3,4 +3,5 @@ venv
 *dat.gz
 build
 __*
+*.log
 
