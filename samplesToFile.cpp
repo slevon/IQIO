@@ -32,6 +32,8 @@
 //Use multiple Threads, one for consuming, and one for fiel writing
 
 unsigned int  clipping_occured =0;
+unsigned int  overflow_occured =0;
+double  peak=0;
 template<typename Data>
 class concurrent_queue
 {
@@ -106,7 +108,7 @@ void writeToFile(std::ostream &out,
   	/////////////////////////
   	long size;
   	std::vector<samp_type> data;
-  	while (!(stop_signal_called) ){
+  	while (!(stop_signal_called) || (queue_size.size()>0) ){
   		if(!queue_size.try_pop(size)
         || !queue_data.try_pop(data)){
           sleep(0.5);
@@ -116,10 +118,13 @@ void writeToFile(std::ostream &out,
             auto maxelem = max_element(data.begin(), data.end(),
                                        [](auto a, auto b) { return abs(a) < abs(b); });
             double nabs=abs(*maxelem);
-            if(nabs > 0.95 and nabs < 1){ //the float case
+            if(nabs > 0.98 and nabs < 1){ //the float case
                 clipping_occured++;
-            }else if(nabs > 32767 * 0.95 ){ //the "short case"
+            }else if(nabs > (32767 * 0.98) ){ //the "short case"
                 clipping_occured++;
+            }
+            if (nabs > peak){
+              peak = nabs;
             }
             out.write((const char*)&data.front(), size);
         }
@@ -203,8 +208,9 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
     // Track time and samps between updating the BW summary
     auto last_update                     = start_time;
     unsigned long long last_update_samps = 0;
-
-
+    unsigned long long clipping_total=0;
+    unsigned long long overflow_total=0;
+    double peak_tot =0 ;
     // Run this loop until either time expired (if a duration was given), until
     // the requested number of samples were collected (if such a number was
     // given), or until Ctrl-C was pressed.
@@ -222,7 +228,10 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
             break;
         }
         if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW) {
-                std::cerr<<"0";
+                std::cerr<<"OVF-restarting"<<std::endl;
+                stream_cmd.time_spec=uhd::time_spec_t();
+                overflow_occured++;
+                rx_stream->issue_stream_cmd(stream_cmd); //restarting...
             continue;
         }
         if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
@@ -257,12 +266,25 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
                 const double time_since_last_update_s =
                     std::chrono::duration<double>(time_since_last_update).count();
                 const double rate = double(last_update_samps) / time_since_last_update_s;
-                std::cout << "rate:" << (rate / 1e6)
-                          << ",unit:\"Msps\",\tqueue:"<<queue_data.size()
-                          <<",clipping:"<<clipping_occured<<std::endl;
+
+                clipping_total += clipping_occured;
+                overflow_total +=overflow_occured;
+                peak_tot = (peak > peak_tot) ? peak : peak_tot;
+                std::cout <<"queue:"<<queue_data.size()
+                          <<",clipp:"<<clipping_occured
+                          <<",clipp_tot:"<<clipping_total
+                          <<",ovf:"<<overflow_occured
+                          <<",ovf_tot:"<<overflow_total
+                          <<",peak:"<<peak
+                          <<",peak_tot:"<<peak_tot
+                          <<",rate:"<<(rate / 1e6)
+                          <<",unit:\"Msps\""
+                          <<std::endl;
                 last_update_samps = 0;
                 last_update       = now;
                 clipping_occured = 0;
+                overflow_occured = 0;
+                peak=0;
             }
         }
     }
@@ -292,6 +314,10 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
                   << std::endl;
         const double rate = (double)num_total_samps / actual_duration_seconds;
         std::cout << (rate / 1e6) << " Msps" << std::endl;
+        std::cout << clipping_total << " Clipping" << std::endl;
+        std::cout << overflow_total << " Overflow" << std::endl;
+        std::cout << peak_tot << " Peak" << std::endl;
+
 
         if (enable_size_map) {
             std::cout << std::endl;

@@ -172,7 +172,6 @@ class GUI():
         cbB = Checkbutton(self.mainFrame, text='Theme ', style='ToggleButton', variable=self.theme_dark,
                           command=self.toggle_theme)
         cbB.grid(row=0, column=3, sticky="e")
-
         #######################
         # Logger:
         ######################
@@ -249,22 +248,24 @@ class GUI():
                     raise ValueError("SLAVE-Mode: Unkown Type >{}< in widget list".format(itm["type"]))
                     # self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
         else:  # Master
+            self.elements.append({"type": "button", "name": "Wifi-Setup", "function": self.set_wifi})
+            self.elements.append({"type": "button", "name": "Show Plot", "function": self.set_show_plot})
             self.elements.append({"type": "label", "name": "self", "function": self.check_self})
             self.elements.append({"type": "label", "name": "internet", "function": self.check_internet})
             self.elements.append({"type": "label", "name": "check_samplesToFile", "function": self.check_processrunning,
                                   "parameter": ["samplesToFile"]})
-            self.elements.append(
-                {"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
+            self.elements.append({"type": "plot", "name": "Disk Queue", "function": self.plot_queue, })
+            self.elements.append({"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
             self.elements.append({"type": "plot", "name": "media_plot", "history": 30, "function": self.check_df,
                                   "parameter": ["media", "plot"]})
             self.elements.append({"type": "label", "name": "check_reader", "function": self.check_processrunning,
                                   "parameter": ["beast_reader.py"]})
             self.elements.append({"type": "label", "name": "file_written", "function": self.check_file_write, })
             self.elements.append({"type": "label", "name": "rate", "function": self.check_rate, })
-            self.elements.append({"type": "plot", "name": "Disk Queue", "function": self.plot_queue, })
+            self.elements.append({"type": "label", "name": "overflow_label", "function": self.check_overflow, })
+            self.elements.append({"type": "plot", "name": "Overflow", "function": self.plot_overflow, })
+            self.elements.append({"type": "plot", "name": "Peak", "function": self.plot_peak })
             self.elements.append({"type": "label", "name": "clipping", "function": self.check_clipping})
-            self.elements.append({"type": "button", "name": "Wifi-Setup", "function": self.set_wifi})
-            self.elements.append({"type": "button", "name": "Show Plot", "function": self.set_show_plot})
 
         self.labels = []  # creates an empty list for your labels
         self.plots = []
@@ -272,7 +273,7 @@ class GUI():
         rowcnt = 0
         for i, itm in enumerate(self.elements):  # iterates over your nums
             r = (rowcnt) % self.row_count + 1
-            c = (rowcnt) // self.row_count
+            c = ((rowcnt) // self.row_count) +2
             rowcnt += 1  ##Plot will always be tow rows high
             if itm["name"] not in self.check_names:
                 self.check_names.append(itm["name"])
@@ -300,7 +301,7 @@ class GUI():
                 print("Error, unkown check type")
 
         ##Embedd the Logger into the GUI!
-        self.textLog.grid(row=1, column=1 + len(self.elements) // self.row_count, rowspan=self.row_count, columnspan=2,
+        self.textLog.grid(row=1, column=0, rowspan=self.row_count, columnspan=2,
                           sticky="nsew",
                           padx=5, pady=1)
 
@@ -312,9 +313,10 @@ class GUI():
 
         for i in range(0, self.row_count + 1):
             self.mainFrame.rowconfigure(i, weight=1)
-        for i in range(0, 1 + len(self.elements) // self.row_count):
-            self.mainFrame.columnconfigure(i, weight=1)
-        self.mainFrame.columnconfigure(1 + len(self.elements) // self.row_count, weight=3)  # The textbox
+        for i in range(0, (len(self.elements) // self.row_count)+2):
+            self.mainFrame.columnconfigure(i+2, weight=1)
+        self.mainFrame.columnconfigure(0, weight=0)  # The textbox
+        self.mainFrame.columnconfigure(1, weight=0)  # The textbox
         #######
         # Start
         #######
@@ -604,7 +606,7 @@ class GUI():
             else:
                 return cols
         else:
-            return "No Messages received"
+            return None
 
     def check_clipping(self):
         '''
@@ -616,19 +618,22 @@ class GUI():
         #    return False, "No Logs found"
         # latest_file = max(list_of_files, key=os.path.getctime)
 
-        data = self._get_file_line("/home/slevon/Desktop/test.log", "clipping")
+        data = self._get_file_line("/home/slevon/Desktop/test.log", "clipp")
         retString = "Rx-Clipping: {}".format(data)
         try:
             if int(data) == 0:
                 return True, retString
             else:
                 return False, retString
-
-
-
         except:
             pass
         return False, retString
+
+    def plot_peak(self):
+        data = float(self._get_file_line("/home/slevon/Desktop/test.log", "peak"))/32767
+        data2 = float(self._get_file_line("/home/slevon/Desktop/test.log", "peak_tot"))/32767
+
+        return True, (data,data2)
 
     def plot_queue(self):
         data = self._get_file_line("/home/slevon/Desktop/test.log", "queue")
@@ -642,7 +647,25 @@ class GUI():
         try:
             return True, "Rate: {} MSPS".format(data)
         except:
-            return False, "Rate: Unknown"
+            return False, "Rate: ?? MSPS"
+    def check_overflow(self):
+        data = self._get_file_line("/home/slevon/Desktop/test.log", "ovf")
+        retString = "Buffer Overflow: {}".format(data)
+        try:
+            if int(data) == 0:
+                return True, retString
+            else:
+                return False, retString
+        except:
+            pass
+
+        return False, retString
+    def plot_overflow(self):
+        data = self._get_file_line("/home/slevon/Desktop/test.log", "ovf_tot")
+        if data is not None:
+            return True,float(data)
+        else:
+            return False,""
 
     def check_processrunning(self, processName):
         '''
