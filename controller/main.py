@@ -1,14 +1,17 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ############
 # Set working dir
 import argparse
 import json
 import os
+import sys
 from socket import timeout
 from time import sleep
-from tkinter import ttk
+from tkinter import ttk, Tk, N, S, E, W, END
+from tkinter.ttk import Label, Button, Checkbutton
 
+from EntryWidgets import Scale, Entry, EntryScale
 from plotWidget import Plotwindow
 
 abspath = os.path.abspath(__file__)
@@ -23,10 +26,7 @@ import time
 
 from collections import OrderedDict
 import tkinter as tk
-from tkinter import *
 from tkinter.scrolledtext import ScrolledText
-from tkinter.ttk import *
-from PIL import ImageTk, Image
 import glob
 import os
 import psutil
@@ -160,12 +160,12 @@ class GUI():
         self.theme_dark = False
         # ttk.Style().theme_use('azure-dark')
         self.window.title('Control: {}'.format("Slave" if is_slave else "Master"))
-        Grid.rowconfigure(self.window, 0, weight=1)
-        Grid.columnconfigure(self.window, 0, weight=1)
+        tk.Grid.rowconfigure(self.window, 0, weight=1)
+        tk.Grid.columnconfigure(self.window, 0, weight=1)
         # self.window.attributes('-zoomed', True)
         self.window.bind("<F11>", self.toggleFullScreen)
         self.window.bind("<Escape>", self.quitFullScreen)
-        self.mainFrame = Frame(self.window)
+        self.mainFrame = tk.Frame(self.window)
 
         self.mainFrame.grid(row=0, column=0, sticky=N + S + E + W)
         # cbB=Checkbutton( self.mainFrame, text='Theme ', style='Switch', variable=self.theme_dark,command=self.toggle_theme)
@@ -244,14 +244,17 @@ class GUI():
                         n)  # This n=itm["name" see: https://stackoverflow.com/questions/19837486/lambda-in-a-loop
                 elif itm["type"] == "button":
                     itm["function"] = lambda n=itm['name']: self.request_command(n)
+                elif itm["type"] == "scale":
+                    itm["function"] = lambda val=itm,itm=itm: self.request_value(val,itm)
                 else:
                     raise ValueError("SLAVE-Mode: Unkown Type >{}< in widget list".format(itm["type"]))
                     # self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
+
         else:  # Master
-            self.elements.append({"type": "button", "name": "Wifi-Setup", "function": self.set_wifi})
-            self.elements.append({"type": "button", "name": "Show Plot", "function": self.set_show_plot})
+            self.elements.append({"type": "button", "name": "Start", "function": self.set_start_process})
+            self.elements.append({"type": "button", "name": "Stop", "function": self.set_stop_process})
+            self.elements.append({"type": "scale", "name": "gain", "from":0,"to":76,"function": self.set_gain})
             self.elements.append({"type": "label", "name": "self", "function": self.check_self})
-            self.elements.append({"type": "label", "name": "internet", "function": self.check_internet})
             self.elements.append({"type": "label", "name": "check_samplesToFile", "function": self.check_processrunning,
                                   "parameter": ["samplesToFile"]})
             self.elements.append({"type": "plot", "name": "Disk Queue", "function": self.plot_queue, })
@@ -270,6 +273,7 @@ class GUI():
         self.labels = []  # creates an empty list for your labels
         self.plots = []
         self.buttons = []
+        self.scales = []
         rowcnt = 0
         for i, itm in enumerate(self.elements):  # iterates over your nums
             r = (rowcnt) % self.row_count + 1
@@ -297,6 +301,16 @@ class GUI():
                 button.grid(row=r, column=c, sticky='nswe', padx=5, pady=5, ipady=5)
                 self.buttons.append(button)
 
+            elif itm['type'] == "scale":
+                scale = tk.Scale(self.mainFrame,label=itm["name"],
+                               from_=itm["from"],to=itm["to"],
+                                command=itm['function'],orient=tk.HORIZONTAL)  # fisrt-case: master , second slave
+                #scale = EntryScale(self.mainFrame,itm["name"],from_=itm["from"],to=itm["to"],command=itm["function"],orient=tk.HORIZONTAL)
+
+                itm['widget'] = scale
+                scale.grid(row=r, column=c, sticky='nswe', padx=5, pady=5, ipady=5)
+                rowcnt += 1 #As we need 2 Rows
+                self.scales.append(scale)
             else:
                 print("Error, unkown check type")
 
@@ -406,20 +420,24 @@ class GUI():
             self.logger.warning("Reception Error {}".format(e))
         if rcv != "":
             try:
-                obj = json.loads(rcv)
-                self.logger.debug("Command received: {}".format(obj["command"]))
-                if obj["command"] == "init":
+                obj = json.loads(rcv)["request"]
+                self.logger.debug("Request received: {}".format(obj["name"]))
+                if obj["name"] == "init":
                     self.send_elements()
                 else:
                     for itm in self.elements:
-                        if itm["type"] == "button":
-                            if itm["name"] == obj["command"]:
+                        if itm["name"] == obj["name"]:
+                            print("NAme found")
+                            if itm["type"] == "button":
                                 itm["function"]()  # Call the Funktions
+                            if itm["type"] == "scale":
+                                itm["widget"].set(obj["value"])
+
             except Exception as e:
                 self.logger.error("Bad formatted incomming command {}".format(rcv))
                 print("Command receive", e)
 
-        self.window.after(1000, self.handle_command_requests)
+        self.window.after(500, self.handle_command_requests)
 
     def request_command(self, command_name):
         '''
@@ -428,7 +446,16 @@ class GUI():
         :return:
         '''
         self.logger.info("Transmitting Command Request: {}".format(command_name))
-        self.io.send(json.dumps({"command": command_name}))
+        self.io.send(json.dumps({"request":{"name": command_name}}))
+
+    def request_value(self, val,itm):
+        '''
+        This function is only called in the Slave mode.
+        :param button_name:
+        :return:
+        '''
+        self.logger.info("Transmitting Value Request: {} {}".format(itm["name"],itm["widget"].get()))
+        self.io.send(json.dumps({"request":{"name": itm["name"],"value":itm["widget"].get()}}))
 
     def get_state_from_received_data(self, widget_name):
         '''
@@ -475,6 +502,8 @@ class GUI():
                 elif itm["type"] == "plot":
                     ui_state[itm["name"]] = {"state": True
                         , "result": itm["widget"].getLast()}
+                #elif itm["type"] == "scale":
+                #    ui_state[itm["name"]] = {"value": itm["widget"].get()}
             # TODO: hier noch mehr zusammen sammeln und dann versenden
             self.io.send(json.dumps(ui_state))
             self.logger.debug("Sent States Data to Port")
@@ -512,6 +541,7 @@ class GUI():
         elif type == "plot":
             if state == True:
                 widget.append(result_value)
+
         else:
             self.logger.error("Unknown widget type could not be updated")
         return result_value
@@ -519,13 +549,16 @@ class GUI():
     #################################################################################################################
     #################################################################################################################
     #################################################################################################################
-    def set_wifi(self):
+    def set_start_process(self):
         # todo:https://raspberrypi.stackexchange.com/questions/104887/information-about-network-gui-in-raspbian
-        self.logger.debug("Wifi Setup called")
+        self.logger.debug("Start Measurement")
 
-    def set_show_plot(self):
-        self.logger.debug("Showing Plot")
+    def set_stop_process(self):
+        self.logger.debug("Stop Measurement")
 
+    def set_gain(self,value):
+        # todo:https://raspberrypi.stackexchange.com/questions/104887/information-about-network-gui-in-raspbian
+        self.logger.debug("Set Gain {}".format(value))
     ###################################################################################################################
     ###################################################################################################################
     ###################################################################################################################
@@ -535,16 +568,6 @@ class GUI():
             return True, "Port Connected"
         # TODO More selftests
         return False, "Selftest failed"
-
-    def check_internet(self, ):
-        conn = httplib.HTTPConnection("www.google.com", timeout=5)
-        try:
-            conn.request("HEAD", "/")
-            conn.close()
-            return True, "Internet available"
-        except:
-            conn.close()
-            return False, "Internet not available"
 
     def check_file_write(self, max_time_diff=600):
         path_s = self.path + '*.dat'
@@ -680,6 +703,7 @@ class GUI():
                                                                      (time.time() - proc.create_time()) / (60))
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 pass
+
         return False, f"{processName}\nnot running"
 
     def take_screenshot(self):
