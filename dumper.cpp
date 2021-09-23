@@ -4,6 +4,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
+//THis tool reads from shared memory file and writes to HDD file
+
 
 #include <uhd/exception.hpp>
 #include <uhd/types/tune_request.hpp>

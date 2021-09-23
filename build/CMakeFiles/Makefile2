@@ -44,15 +44,16 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/slevon/c/uhd1030
+CMAKE_SOURCE_DIR = /home/slevon/c/IQIO
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/slevon/c/uhd1030/build
+CMAKE_BINARY_DIR = /home/slevon/c/IQIO/build
 
 #=============================================================================
 # Directory level rules for the build root directory
 
 # The main recursive "all" target.
+all: CMakeFiles/samplesFromFile.dir/all
 all: CMakeFiles/samplesToFile.dir/all
 
 .PHONY : all
@@ -63,9 +64,37 @@ preinstall:
 .PHONY : preinstall
 
 # The main recursive "clean" target.
+clean: CMakeFiles/samplesFromFile.dir/clean
 clean: CMakeFiles/samplesToFile.dir/clean
 
 .PHONY : clean
+
+#=============================================================================
+# Target rules for target CMakeFiles/samplesFromFile.dir
+
+# All Build rule for target.
+CMakeFiles/samplesFromFile.dir/all:
+	$(MAKE) -f CMakeFiles/samplesFromFile.dir/build.make CMakeFiles/samplesFromFile.dir/depend
+	$(MAKE) -f CMakeFiles/samplesFromFile.dir/build.make CMakeFiles/samplesFromFile.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/slevon/c/IQIO/build/CMakeFiles --progress-num=1,2 "Built target samplesFromFile"
+.PHONY : CMakeFiles/samplesFromFile.dir/all
+
+# Build rule for subdir invocation for target.
+CMakeFiles/samplesFromFile.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/IQIO/build/CMakeFiles 2
+	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/samplesFromFile.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/IQIO/build/CMakeFiles 0
+.PHONY : CMakeFiles/samplesFromFile.dir/rule
+
+# Convenience name for target.
+samplesFromFile: CMakeFiles/samplesFromFile.dir/rule
+
+.PHONY : samplesFromFile
+
+# clean rule for target.
+CMakeFiles/samplesFromFile.dir/clean:
+	$(MAKE) -f CMakeFiles/samplesFromFile.dir/build.make CMakeFiles/samplesFromFile.dir/clean
+.PHONY : CMakeFiles/samplesFromFile.dir/clean
 
 #=============================================================================
 # Target rules for target CMakeFiles/samplesToFile.dir
@@ -74,14 +103,14 @@ clean: CMakeFiles/samplesToFile.dir/clean
 CMakeFiles/samplesToFile.dir/all:
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/depend
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/slevon/c/uhd1030/build/CMakeFiles --progress-num=1,2 "Built target samplesToFile"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/slevon/c/IQIO/build/CMakeFiles --progress-num=3,4 "Built target samplesToFile"
 .PHONY : CMakeFiles/samplesToFile.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/samplesToFile.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/IQIO/build/CMakeFiles 2
 	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/samplesToFile.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/IQIO/build/CMakeFiles 0
 .PHONY : CMakeFiles/samplesToFile.dir/rule
 
 # Convenience name for target.

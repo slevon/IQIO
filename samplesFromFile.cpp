@@ -18,6 +18,8 @@
 #include <iostream>
 #include <thread>
 
+#include <numeric>
+
 namespace po = boost::program_options;
 
 static bool stop_signal_called = false;
@@ -25,6 +27,7 @@ void sig_int_handler(int)
 {
     stop_signal_called = true;
 }
+
 
 template <typename samp_type>
 void send_from_file(
@@ -35,12 +38,22 @@ void send_from_file(
     md.end_of_burst   = false;
     std::vector<samp_type> buff(samps_per_buff);
     std::ifstream infile(file.c_str(), std::ifstream::binary);
+    //IPC file:
+    std::ofstream comfile("/dev/shm/samplesFromFile");
 
     // loop until the entire file has been read
-
+    size_t tot_samples_sent = 0;
     while (not md.end_of_burst and not stop_signal_called) {
         infile.read((char*)&buff.front(), buff.size() * sizeof(samp_type));
         size_t num_tx_samps = size_t(infile.gcount() / sizeof(samp_type));
+        //Max
+        auto maxelem=max_element(buff.begin(), buff.end(),
+                                   [](auto a, auto b) { return abs(a) < abs(b); });
+        auto nabs=abs(*maxelem);
+        //Mean
+        static const auto abssum = [] (auto x, auto y) {return x + std::abs(y);};
+        double sum = std::accumulate(buff.begin(), buff.end(), 0.0,abssum);
+        double mean =  sum / buff.size();
 
         md.end_of_burst = infile.eof();
 
@@ -51,9 +64,13 @@ void send_from_file(
                                                    << samples_sent << " sent).");
             return;
         }
+
+        tot_samples_sent += samples_sent;
+        comfile << "Samples\t"<< tot_samples_sent  << "\tMax\t" << nabs <<"\tMean\t"<<mean<<std::endl;
     }
 
     infile.close();
+    comfile.close();
 }
 
 int UHD_SAFE_MAIN(int argc, char* argv[])

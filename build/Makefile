@@ -48,10 +48,10 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/slevon/c/uhd1030
+CMAKE_SOURCE_DIR = /home/slevon/c/IQIO
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/slevon/c/uhd1030/build
+CMAKE_BINARY_DIR = /home/slevon/c/IQIO/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -80,9 +80,9 @@ edit_cache/fast: edit_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles /home/slevon/c/uhd1030/build/CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/IQIO/build/CMakeFiles /home/slevon/c/IQIO/build/CMakeFiles/progress.marks
 	$(MAKE) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/uhd1030/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/slevon/c/IQIO/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
@@ -111,6 +111,19 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+# Target rules for targets named samplesFromFile
+
+# Build rule for target.
+samplesFromFile: cmake_check_build_system
+	$(MAKE) -f CMakeFiles/Makefile2 samplesFromFile
+.PHONY : samplesFromFile
+
+# fast build rule for target.
+samplesFromFile/fast:
+	$(MAKE) -f CMakeFiles/samplesFromFile.dir/build.make CMakeFiles/samplesFromFile.dir/build
+.PHONY : samplesFromFile/fast
+
+#=============================================================================
 # Target rules for targets named samplesToFile
 
 # Build rule for target.
@@ -122,6 +135,33 @@ samplesToFile: cmake_check_build_system
 samplesToFile/fast:
 	$(MAKE) -f CMakeFiles/samplesToFile.dir/build.make CMakeFiles/samplesToFile.dir/build
 .PHONY : samplesToFile/fast
+
+samplesFromFile.o: samplesFromFile.cpp.o
+
+.PHONY : samplesFromFile.o
+
+# target to build an object file
+samplesFromFile.cpp.o:
+	$(MAKE) -f CMakeFiles/samplesFromFile.dir/build.make CMakeFiles/samplesFromFile.dir/samplesFromFile.cpp.o
+.PHONY : samplesFromFile.cpp.o
+
+samplesFromFile.i: samplesFromFile.cpp.i
+
+.PHONY : samplesFromFile.i
+
+# target to preprocess a source file
+samplesFromFile.cpp.i:
+	$(MAKE) -f CMakeFiles/samplesFromFile.dir/build.make CMakeFiles/samplesFromFile.dir/samplesFromFile.cpp.i
+.PHONY : samplesFromFile.cpp.i
+
+samplesFromFile.s: samplesFromFile.cpp.s
+
+.PHONY : samplesFromFile.s
+
+# target to generate assembly for a file
+samplesFromFile.cpp.s:
+	$(MAKE) -f CMakeFiles/samplesFromFile.dir/build.make CMakeFiles/samplesFromFile.dir/samplesFromFile.cpp.s
+.PHONY : samplesFromFile.cpp.s
 
 samplesToFile.o: samplesToFile.cpp.o
 
@@ -158,7 +198,11 @@ help:
 	@echo "... depend"
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
+	@echo "... samplesFromFile"
 	@echo "... samplesToFile"
+	@echo "... samplesFromFile.o"
+	@echo "... samplesFromFile.i"
+	@echo "... samplesFromFile.s"
 	@echo "... samplesToFile.o"
 	@echo "... samplesToFile.i"
 	@echo "... samplesToFile.s"

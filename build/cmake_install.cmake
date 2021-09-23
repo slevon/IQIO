@@ -1,4 +1,4 @@
-# Install script for directory: /home/slevon/c/uhd1030
+# Install script for directory: /home/slevon/c/IQIO
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/slevon/c/uhd1030/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/slevon/c/IQIO/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

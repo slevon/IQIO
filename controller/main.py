@@ -149,7 +149,7 @@ class StatIo:
 ##################################################################################################################
 ##################################################################################################################
 class GUI():
-    def __init__(self, is_slave=True, port="/dev/ttyUSB0"):
+    def __init__(self, samplesToFileLogPath,is_slave=True, port="/dev/ttyUSB0"):
         self.window = Tk()
         # Import the tcl file
         # see: https://github.com/rdbende/Azure-ttk-theme
@@ -205,6 +205,7 @@ class GUI():
         ###############
         self.bad = 0  # mon has a bad state if >0 (number of checks*bad states)
         self.row_count = 8  # widgets rows
+        self.samplesToFileLogPath=samplesToFileLogPath
         '''
         We have two options here:
             - Master:   - Creates a set of widgets from the constuctor
@@ -614,23 +615,27 @@ class GUI():
                :param field_name:  If None ist specified, all Field will be returned
                :return:
                '''
-        with open(file, 'rb') as f:
-            f.seek(-2, os.SEEK_END)
-            while f.read(1) != b'\n':
-                f.seek(-2, os.SEEK_CUR)
-            last_line = f.readline().decode()
+        try:
+            with open(file, 'rb') as f:
+                f.seek(-2, os.SEEK_END)
+                while f.read(1) != b'\n':
+                    f.seek(-2, os.SEEK_CUR)
+                last_line = f.readline().decode()
 
-        cols = last_line.split(",")
-        if len(cols) > 2:
-            if field_name:
-                for idx, itm in enumerate(cols):
-                    if field_name in itm:
-                        return itm.split(":")[-1]
+            cols = last_line.split(",")
+            if len(cols) > 2:
+                if field_name:
+                    for idx, itm in enumerate(cols):
+                        if field_name in itm:
+                            return itm.split(":")[-1]
+                else:
+                    return cols
             else:
-                return cols
-        else:
-            return None
+                return None
+        except Exception as e:
+            self.logger.error("Could not open or error in file {}".format(self.samplesToFileLogPath))
 
+        return None
     def check_clipping(self):
         '''
         :return:
@@ -641,7 +646,7 @@ class GUI():
         #    return False, "No Logs found"
         # latest_file = max(list_of_files, key=os.path.getctime)
 
-        data = self._get_file_line("/home/slevon/Desktop/test.log", "clipp")
+        data = self._get_file_line(self.samplesToFileLogPath, "clipp")
         retString = "Rx-Clipping: {}".format(data)
         try:
             if int(data) == 0:
@@ -653,26 +658,26 @@ class GUI():
         return False, retString
 
     def plot_peak(self):
-        data = float(self._get_file_line("/home/slevon/Desktop/test.log", "peak"))/32767
-        data2 = float(self._get_file_line("/home/slevon/Desktop/test.log", "peak_tot"))/32767
+        data = float(self._get_file_line(self.samplesToFileLogPath, "peak"))/32767
+        data2 = float(self._get_file_line(self.samplesToFileLogPath, "peak_tot"))/32767
 
         return True, (data,data2)
 
     def plot_queue(self):
-        data = self._get_file_line("/home/slevon/Desktop/test.log", "queue")
+        data = self._get_file_line(self.samplesToFileLogPath, "queue")
         try:
             return True, int(data)
         except:
             return False, 0
 
     def check_rate(self):
-        data = self._get_file_line("/home/slevon/Desktop/test.log", "rate")
+        data = self._get_file_line(self.samplesToFileLogPath, "rate")
         try:
             return True, "Rate: {} MSPS".format(data)
         except:
             return False, "Rate: ?? MSPS"
     def check_overflow(self):
-        data = self._get_file_line("/home/slevon/Desktop/test.log", "ovf")
+        data = self._get_file_line(self.samplesToFileLogPath, "ovf")
         retString = "Buffer Overflow: {}".format(data)
         try:
             if int(data) == 0:
@@ -684,7 +689,7 @@ class GUI():
 
         return False, retString
     def plot_overflow(self):
-        data = self._get_file_line("/home/slevon/Desktop/test.log", "ovf_tot")
+        data = self._get_file_line(self.samplesToFileLogPath, "ovf_tot")
         if data is not None:
             return True,float(data)
         else:
@@ -712,12 +717,12 @@ class GUI():
         process.wait()
         return path
 
-
 if __name__ == '__main__':
     ########################################
     # Parse the command line arguments
     ########################################
     parser = argparse.ArgumentParser()
+    parser.add_argument("logpath",help="path to samplesToFile logpath")
     parser.add_argument('-s', "--slave", action='store_true',
                         help="start Controller in Slave mode (Running on the Ground Station)")
     parser.add_argument('-l', '--list', action='store_true', help="List avialable devices and exit")
@@ -729,6 +734,6 @@ if __name__ == '__main__':
             print(port.device)
         sys.exit(0)
 
-    app = GUI(is_slave=args.slave, port=args.port)
+    app = GUI(args.logpath,is_slave=args.slave, port=args.port)
 
 

@@ -51,7 +51,7 @@ link_directories(${Boost_LIBRARY_DIRS})
 
 ### Make the executable #######################################################
 add_executable(samplesToFile samplesToFile.cpp)
-#add_executable(samplesFromFile samplesFromFile.cpp)
+add_executable(samplesFromFile samplesFromFile.cpp)
 #add_executable(samplesToFileThreaded samplesToFileThreaded.cpp)
 #add_executable(dumper dumper.cpp)
 
@@ -64,14 +64,14 @@ message(STATUS "* linker flags to make sure your specific requirements are inclu
 message(STATUS "******************************************************************************")
 message(STATUS "*********************Romans options********************************************")
 message(STATUS "Added iostreams for compression in the UHD_BOOST_REQUIRED_COMPONENTS section!!!")
-message(STATUS "WAring; New cpp files have to be added in two places! Line 50 and lein 70*")
+message(STATUS "Warning; New cpp files have to be added in two places! Line 53 and line 73*")
 
 # Shared library case: All we need to do is link against the library, and
 # anything else we need (in this case, some Boost libraries):
 if(NOT UHD_USE_STATIC_LIBS)
     message(STATUS "Linking against shared UHD library.")
     target_link_libraries(samplesToFile ${UHD_LIBRARIES} ${Boost_LIBRARIES})
-    #target_link_libraries(samplesFromFile ${UHD_LIBRARIES} ${Boost_LIBRARIES})
+    target_link_libraries(samplesFromFile ${UHD_LIBRARIES} ${Boost_LIBRARIES})
     #target_link_libraries(samplesToFileThreaded ${UHD_LIBRARIES} ${Boost_LIBRARIES})
     #target_link_libraries(dumper ${UHD_LIBRARIES} ${Boost_LIBRARIES})
 # Shared library case: All we need to do is link against the library, and

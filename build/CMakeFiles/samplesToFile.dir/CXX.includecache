@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/slevon/c/uhd1030/samplesToFile.cpp
+/home/slevon/c/IQIO/samplesToFile.cpp
 stdlib.h
 -
 limits
