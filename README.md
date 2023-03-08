@@ -20,7 +20,7 @@ make
 ```
 sudo ./samplesToFile --freq 1030e6 --rate 12e6 --gain 76 --bw 22e6 --duration 1200  --progress --stat
 ```
-This creates the file `usrp_samples.dat` in the current directory
+This creates the file `usrp_samples.dat` in the current directory that contains the samples.
 
 
 ## Run Playback
