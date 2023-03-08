@@ -252,19 +252,19 @@ class GUI():
                     # self.checks.append({"name": "port_in_use", "function": self.check_port_in_use})
 
         else:  # Master
-            self.elements.append({"type": "button", "name": "Start", "function": self.set_start_process})
-            self.elements.append({"type": "button", "name": "Stop", "function": self.set_stop_process})
-            self.elements.append({"type": "scale", "name": "gain", "from":0,"to":76,"function": self.set_gain})
-            self.elements.append({"type": "label", "name": "self", "function": self.check_self})
+            #self.elements.append({"type": "button", "name": "Start", "function": self.set_start_process})
+            #self.elements.append({"type": "button", "name": "Stop", "function": self.set_stop_process})
+            #self.elements.append({"type": "scale", "name": "gain", "from":0,"to":76,"function": self.set_gain})
+            #self.elements.append({"type": "label", "name": "self", "function": self.check_self})
             self.elements.append({"type": "label", "name": "check_samplesToFile", "function": self.check_processrunning,
                                   "parameter": ["samplesToFile"]})
             self.elements.append({"type": "plot", "name": "Disk Queue", "function": self.plot_queue, })
-            self.elements.append({"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
-            self.elements.append({"type": "plot", "name": "media_plot", "history": 30, "function": self.check_df,
-                                  "parameter": ["media", "plot"]})
-            self.elements.append({"type": "label", "name": "check_reader", "function": self.check_processrunning,
-                                  "parameter": ["beast_reader.py"]})
-            self.elements.append({"type": "label", "name": "file_written", "function": self.check_file_write, })
+            #self.elements.append({"type": "label", "name": "media", "function": self.check_df, "parameter": ["media", "label"]})
+            #self.elements.append({"type": "plot", "name": "media_plot", "history": 30, "function": self.check_df,
+            #                      "parameter": ["media", "plot"]})
+            #self.elements.append({"type": "label", "name": "check_reader", "function": self.check_processrunning,
+            #                      "parameter": ["beast_reader.py"]})
+            #self.elements.append({"type": "label", "name": "file_written", "function": self.check_file_write, })
             self.elements.append({"type": "label", "name": "rate", "function": self.check_rate, })
             self.elements.append({"type": "label", "name": "overflow_label", "function": self.check_overflow, })
             self.elements.append({"type": "plot", "name": "Overflow", "function": self.plot_overflow, })
@@ -507,7 +507,7 @@ class GUI():
                 #    ui_state[itm["name"]] = {"value": itm["widget"].get()}
             # TODO: hier noch mehr zusammen sammeln und dann versenden
             self.io.send(json.dumps(ui_state))
-            self.logger.debug("Sent States Data to Port")
+            #self.logger.debug("Sent States Data to Port")
 
     def sys_check(self):
         '''
@@ -658,8 +658,12 @@ class GUI():
         return False, retString
 
     def plot_peak(self):
-        data = float(self._get_file_line(self.samplesToFileLogPath, "peak"))/32767
-        data2 = float(self._get_file_line(self.samplesToFileLogPath, "peak_tot"))/32767
+        try:
+            data = float(self._get_file_line(self.samplesToFileLogPath, "peak"))/32767
+            data2 = float(self._get_file_line(self.samplesToFileLogPath, "peak_tot"))/32767
+        except:
+            data=0
+            data2=0
 
         return True, (data,data2)
 

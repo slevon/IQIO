@@ -8,7 +8,7 @@
 #Version 29.06.2021
 # -Added sampelesToFileThreaded and other templates
 
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.15.0)
 project(INIT_USRP CXX)
 
 ### Configure Compiler ########################################################
@@ -26,7 +26,7 @@ endif()
 option(UHD_USE_STATIC_LIBS OFF)
 
 # To add UHD as a dependency to this project, add a line such as this:
-find_package(UHD 4.0.0 REQUIRED)
+find_package(UHD 4.1.0 REQUIRED)
 # The version in  ^^^^^  here is a minimum version.
 # To specify an exact version:
 #find_package(UHD 4.0.0 EXACT REQUIRED)

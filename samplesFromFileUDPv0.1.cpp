@@ -31,43 +31,6 @@ void sig_int_handler(int)
     stop_signal_called = true;
 }
 
-template <typename samp_type>
-void send_from_file_udp_only(
-    const std::string& file, size_t samps_per_buff)
-{
-  std::vector<samp_type> buff(samps_per_buff);
-  std::ifstream infile(file.c_str(), std::ifstream::binary);
-  //IPC file:
-  std::ofstream comfile("/dev/shm/samplesFromFile");
-  //UDP Packet send
-  boost::asio::io_service io_service;
-  boost::asio::ip::udp::socket socket(io_service);
-  socket.open(boost::asio::ip::udp::v4());
-  socket.set_option(boost::asio::socket_base::broadcast(true));
-  boost::asio::ip::udp::endpoint endpoint_(boost::asio::ip::address::from_string("0.0.0.0"), 50207);
-
-  // loop until the entire file has been read
-  size_t tot_samples_sent = 0;
-  while (not infile.eof() and not stop_signal_called) {
-    infile.read((char*)&buff.front(), buff.size() * sizeof(samp_type));
-    size_t num_tx_samps = size_t(infile.gcount() / sizeof(samp_type));
-    //Max
-    auto maxelem=max_element(buff.begin(), buff.end(),
-                               [](auto a, auto b) { return abs(a) < abs(b); });
-    auto nabs=abs(*maxelem);
-    //Mean
-    static const auto abssum = [] (auto x, auto y) {return x + std::abs(y);};
-    double sum = std::accumulate(buff.begin(), buff.end(), 0.0,abssum);
-    double mean =  sum / buff.size();
-
-    tot_samples_sent += num_tx_samps;
-    comfile << "Samples\t"<< tot_samples_sent  << "\tMax\t" << nabs <<"\tMean\t"<<mean<<std::endl;
-    //UDP Send:
-    socket.send_to(boost::asio::buffer((char*)&buff.front(), buff.size()), endpoint_ );
-  }
-    infile.close();
-    std::cout << "Total Buffers sent:"<<tot_samples_sent/samps_per_buff << '\n';
-}
 
 template <typename samp_type>
 void send_from_file(
@@ -77,7 +40,6 @@ void send_from_file(
     md.start_of_burst = false;
     md.end_of_burst   = false;
     std::vector<samp_type> buff(samps_per_buff);
-    std::cout << "Buffersize: "<< buff.size() << '\n';
     std::ifstream infile(file.c_str(), std::ifstream::binary);
     //IPC file:
     std::ofstream comfile("/dev/shm/samplesFromFile");
@@ -87,7 +49,7 @@ void send_from_file(
     boost::asio::ip::udp::socket socket(io_service);
     socket.open(boost::asio::ip::udp::v4());
     socket.set_option(boost::asio::socket_base::broadcast(true));
-    boost::asio::ip::udp::endpoint endpoint_(boost::asio::ip::address::from_string("0.0.0.0"), 50207);
+    boost::asio::ip::udp::endpoint endpoint_(boost::asio::ip::address::from_string("0.0.0.0"), 52341);
 
 
     // loop until the entire file has been read
@@ -117,7 +79,7 @@ void send_from_file(
         tot_samples_sent += samples_sent;
         comfile << "Samples\t"<< tot_samples_sent  << "\tMax\t" << nabs <<"\tMean\t"<<mean<<std::endl;
         //UDP Send:
-        socket.send_to(boost::asio::buffer((char*)&buff.front(), buff.size()), endpoint_ );
+        socket.async_send_to(boost::asio::buffer((char*)&buff.front(), buff.size()), endpoint_ );
 
     }
 
@@ -154,9 +116,9 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         ("delay", po::value<double>(&delay)->default_value(0.0), "specify a delay between repeated transmission of file (in seconds)")
         ("channel", po::value<std::string>(&channel)->default_value("0"), "which channel to use")
         ("repeat", "repeatedly transmit file")
-        ("udp", "send samples using udp on port 50207")
+        ("udp", "send samples using udp on port 52341")
         ("int-n", "tune USRP with integer-n tuning")
-        ("echo-only", "only print the samples to udp port")
+        ("echo-only", "only print the smaples to screen")
     ;
     // clang-format on
     po::variables_map vm;
@@ -172,7 +134,6 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     bool repeat = vm.count("repeat") > 0;
     bool echo_only = vm.count("echo-only") > 0;
 
-    if(not echo_only){
     // create a usrp device
     std::cout << std::endl;
     std::cout << boost::format("Creating the usrp device with: %s...") % args
@@ -272,11 +233,13 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
                   << std::endl;
         UHD_ASSERT_THROW(ref_locked.to_bool());
     }
+
     // set sigint if user wants to receive
     if (repeat) {
         std::signal(SIGINT, &sig_int_handler);
         std::cout << "Press Ctrl + C to stop streaming..." << std::endl;
     }
+
     // create a transmit streamer
     std::string cpu_format;
     std::vector<size_t> channel_nums;
@@ -290,6 +253,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     channel_nums.push_back(boost::lexical_cast<size_t>(channel));
     stream_args.channels             = channel_nums;
     uhd::tx_streamer::sptr tx_stream = usrp->get_tx_stream(stream_args);
+
     // send from file
     do {
         if (type == "double")
@@ -305,23 +269,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
             std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(delay * 1000)));
         }
     } while (repeat and not stop_signal_called);
-  }else{//echo only mode
-    std::cout << "echo_only:" << '\n';
-    do {
-        if (type == "double")
-            send_from_file_udp_only<std::complex<double>>( file, spb);
-        else if (type == "float")
-            send_from_file_udp_only<std::complex<float>>( file, spb);
-        else if (type == "short")
-            send_from_file_udp_only<std::complex<short>>( file, spb);
-        else
-            throw std::runtime_error("Unknown type " + type);
 
-        if (repeat and delay > 0.0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(int64_t(delay * 1000)));
-        }
-    } while (repeat and not stop_signal_called);
-  }
     // finished
     std::cout << std::endl << "Done!" << std::endl << std::endl;
 
